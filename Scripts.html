@@ -1,0 +1,33 @@
+<!-- ═══════════════════════════════════════════════════════════════
+  ระบบงานปกครองนักเรียน (SAM) · Scripts.html — bootstrap loader (inject inert → wire → boot)
+  Version: 1.0.0 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
+═══════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  function setText(t) { var e = document.getElementById('boot-text'); if (e) e.textContent = t; }
+  function start() {
+    try {
+      setText('กำลังโหลดสคริปต์หลัก…');
+      var blocks = document.querySelectorAll('script[type="text/x-sam"]');
+      if (!blocks.length) { setText('❌ ไม่พบสคริปต์หลัก'); return; }
+      for (var i = 0; i < blocks.length; i++) {
+        var src = blocks[i].textContent || '';
+        if (!src) continue;
+        var s = document.createElement('script');
+        s.text = src;
+        document.body.appendChild(s);
+      }
+      if (!window.SAM || typeof window.SAM.boot !== 'function') { setText('❌ ระบบเริ่มต้นไม่สำเร็จ'); return; }
+      setText('กำลังเริ่มต้นระบบ…');
+      window.SAM.wireGlobal();
+      window.SAM.boot();
+    } catch (e) {
+      setText('❌ ' + (e && e.message ? e.message : 'เริ่มต้นระบบไม่สำเร็จ'));
+      if (window.console) console.error(e);
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, false);
+  else start();
+})();
+</script>

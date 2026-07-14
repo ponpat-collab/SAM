@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"$CLAUDE_PROJECT_DIR/.claude/RULES.md\"",
+            "statusMessage": "โหลดกฎเหล็กของโปรเจกต์",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

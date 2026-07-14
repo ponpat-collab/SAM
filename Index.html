@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════
+  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
+  File: Index.html — เชลล์ HTML · head · inert script includes · boot data
+  Version: 1.0.0 · Last Update: 2026-07-13 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  License: Proprietary · © 2026
+  Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
+═══════════════════════════════════════════════════════════════ -->
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+  <?!= include('Styles'); ?>
+  <?!= include('Styles2'); ?>
+</head>
+<body>
+  <div id="boot-loader" class="boot-loader">
+    <div class="boot-ring"><i class="bi bi-shield-check"></i></div>
+    <div class="boot-brand">ระบบงานปกครองนักเรียน</div>
+    <div id="boot-text" class="boot-text">กำลังเริ่มต้นระบบ…</div>
+  </div>
+
+  <div id="app-root"></div>
+  <div id="modal-host"></div>
+  <div id="spin-host"></div>
+
+  <script id="sam-boot" type="application/json"><?!= BOOT_JSON ?></script>
+
+  <?!= include('ScriptsCore'); ?>
+  <?!= include('ScriptsPages'); ?>
+  <?!= include('ScriptsPages2'); ?>
+  <?!= include('Scripts'); ?>
+</body>
+</html>
