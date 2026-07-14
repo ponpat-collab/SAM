@@ -144,6 +144,8 @@ node -e '
   var cl=fs.readFileSync("ScriptsCore.html","utf8")+fs.readFileSync("ScriptsPages.html","utf8")+fs.readFileSync("ScriptsPages2.html","utf8");
   var routes={}, m, r1=/case\s+["\x27]([a-z_]+\.[a-z_]+)["\x27]/g;
   while((m=r1.exec(code))) routes[m[1]]=1;
+  var r0=/action === ["\x27]([a-z_]+\.[a-z_]+)["\x27]/g;   // ★ route แบบ if (action === "x.y") เช่น public.*
+  while((m=r0.exec(code))) routes[m[1]]=1;
   ["app.bootstrap","auth.login","auth.logout"].forEach(function(a){routes[a]=1;});
   var calls={}, r2=/call\(\s*["\x27]([a-z_]+\.[a-z_]+)["\x27]/g;
   while((m=r2.exec(cl))) calls[m[1]]=1;
@@ -298,6 +300,9 @@ node -e '
   var cl=fs.readFileSync("ScriptsCore.html","utf8")+fs.readFileSync("ScriptsPages.html","utf8")+fs.readFileSync("ScriptsPages2.html","utf8");
   var routes=[],m,r1=/case\s+["\x27]([a-z_]+\.[a-z_]+)["\x27]/g;
   while((m=r1.exec(code))) routes.push(m[1]);
+  // ★ รองรับ route แบบ if (action === "x.y") (เช่น public.* ที่ dispatch ก่อน switch)
+  var r0=/action === ["\x27]([a-z_]+\.[a-z_]+)["\x27]/g;
+  while((m=r0.exec(code))) routes.push(m[1]);
   var calls={};
   // ★ รองรับทั้ง call(action,...) และ cachedCall(key,ttl,action,...)
   var r2=/\bcall\(\s*["\x27]([a-z_]+\.[a-z_]+)["\x27]/g;

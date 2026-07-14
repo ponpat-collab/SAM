@@ -632,6 +632,80 @@ button{font-family:inherit}
   .sp-stats{grid-template-columns:1fr}
   .lp-grid{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ── scan row (input + ปุ่มค้นหา — แก้ Enter บนมือถือ) ── */
+.scan-row{display:flex;gap:10px;align-items:stretch}
+.scan-row .scan-input{flex:1;min-width:0}
+.scan-go{flex:0 0 58px;border:0;border-radius:14px;background:var(--grad);color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(37,99,235,.28)}
+.scan-go:active{transform:translateY(1px)}
+
+/* ── Live Board (จอแยก 2 ฝั่ง) ── */
+.board-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+.board-col{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;min-height:60vh}
+.board-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;color:#fff}
+.board-h.amber{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
+.board-h.sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8)}
+.board-h .bt{font-family:'Kanit';font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+.board-h .bc{font-family:'Kanit';font-weight:800;font-size:26px;min-width:44px;text-align:center;background:rgba(255,255,255,.22);border-radius:12px;padding:2px 10px}
+.board-body{flex:1;overflow-y:auto;padding:10px}
+.brow{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;border:1px solid var(--line2);margin-bottom:8px;animation:popin .2s ease}
+.brow.self{border-color:#bfdbfe;background:#f5faff}
+.btime{flex:0 0 52px;font-family:'Kanit';font-weight:800;font-size:16px;color:var(--blue);text-align:center}
+.bmain{flex:1;min-width:0}
+.bnm{font-weight:700;font-size:14.5px;color:var(--ink);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bself{font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:99px;padding:1px 8px}
+.bmeta{font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.board-empty{text-align:center;color:var(--muted);padding:44px 12px}
+.board-empty i{font-size:40px;display:block;margin-bottom:8px;opacity:.5}
+.board-foot{text-align:center;color:var(--ink2);font-size:12.5px;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px}
+@media(max-width:720px){.board-wrap{grid-template-columns:1fr}.board-col{min-height:44vh}}
+
+/* ── login: ปุ่ม self-service สำหรับนักเรียน ── */
+.lf-self{margin-top:16px;padding:14px;border:1.5px dashed var(--line);border-radius:16px;background:#fafcff}
+.lf-self-h{font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.lf-self-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lf-self-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:15px 8px;border:0;border-radius:14px;color:#fff;cursor:pointer;font-family:'Kanit';font-weight:700;font-size:13.5px;transition:transform .12s,box-shadow .12s}
+.lf-self-btn i{font-size:24px}
+.lf-self-btn.amber{background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 8px 18px rgba(245,158,11,.3)}
+.lf-self-btn.sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8);box-shadow:0 8px 18px rgba(14,165,233,.3)}
+.lf-self-btn:hover{transform:translateY(-2px)}
+.lf-self-btn:active{transform:translateY(0)}
+.lf-self-note{text-align:center;font-size:11px;color:var(--muted);margin-top:8px}
+
+/* ── self-service full-screen (นักเรียน) ── */
+.ss-stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(1200px 600px at 50% -10%,#eaf2ff,#f6f9ff)}
+.ss-card{width:100%;max-width:460px;background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,.16)}
+.ss-head{position:relative;padding:22px 20px 20px;color:#fff;text-align:center}
+.ss-head.amber{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
+.ss-head.sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8)}
+.ss-back{position:absolute;left:14px;top:16px;width:38px;height:38px;border:0;border-radius:11px;background:rgba(255,255,255,.22);color:#fff;font-size:18px;cursor:pointer}
+.ss-ht{font-family:'Kanit';font-weight:800;font-size:19px;display:flex;align-items:center;justify-content:center;gap:8px}
+.ss-hs{font-size:12.5px;opacity:.92;margin-top:4px}
+.ss-body{padding:20px}
+.ss-inrow{display:flex;gap:10px}
+.ss-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;padding:15px 16px;font-size:24px;font-weight:700;font-family:'Kanit';text-align:center;letter-spacing:.12em;color:var(--ink)}
+.ss-input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.14)}
+.ss-go{flex:0 0 56px;border:0;border-radius:14px;background:var(--grad);color:#fff;font-size:21px;cursor:pointer}
+.ss-stu{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;margin:16px 0}
+.ss-av{width:48px;height:48px;border-radius:12px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Kanit'}
+.ss-nm{font-weight:700;font-size:16px;color:var(--ink)}
+.ss-meta{font-size:12.5px;color:var(--ink2);margin-top:2px}
+.ss-warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.ss-lbl{font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:9px}
+.ss-reasons{display:flex;flex-wrap:wrap;gap:8px}
+.ss-rbtn{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:11px;padding:10px 14px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:'Kanit'}
+.ss-rbtn.on{background:var(--grad);color:#fff;border-color:transparent}
+.ss-field{margin-top:14px}
+.ss-field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.ss-tin{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;font-family:'Sarabun';color:var(--ink)}
+.ss-tin:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+#ss-submit{margin-top:18px}
+.ss-done{text-align:center;padding:20px 6px}
+.ss-check{width:76px;height:76px;margin:0 auto 14px;border-radius:50%;background:linear-gradient(135deg,#10b981,#34d399);color:#fff;display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 12px 28px rgba(16,185,129,.36);animation:popin .3s ease}
+.ss-dt{font-family:'Kanit';font-weight:800;font-size:20px;color:var(--ink)}
+.ss-ds{font-size:13px;color:var(--ink2);margin-top:6px}
+.ss-dbtns{display:flex;gap:10px;margin-top:20px}
+.ss-dbtns .btn{flex:1}
 </style>
 
 </head>
@@ -991,6 +1065,12 @@ button{font-family:inherit}
     var demoCards = showDemo ? '<div class="lf-demo"><div class="lf-demo-h"><i class="bi bi-stars"></i> บัญชีทดลอง <span class="dm">DEMO</span></div><div class="lf-demo-grid">' +
       demo.map(function (d) { var ic = { admin: 'shield-lock-fill', teacher: 'person-badge-fill', advisor: 'person-workspace', director: 'building-fill-gear' }[d.role] || 'person'; return '<button type="button" class="lf-demo-card" data-demo="' + esc(d.username) + '" data-role="' + esc(d.role) + '"><div class="di"><i class="bi bi-' + ic + '"></i></div><div class="dr">' + esc((b.roles || {})[d.role] || d.role) + '</div><div class="du">' + esc(d.username) + '</div></button>'; }).join('') +
       '</div><div class="lf-demo-note">คลิกการ์ดเพื่อเข้าสู่ระบบทันที (รหัส 123456)</div></div>' : '';
+    var showSelf = !b.settings || String(b.settings.self_service || 'yes').toLowerCase() === 'yes';
+    var selfSvc = showSelf ? '<div class="lf-self"><div class="lf-self-h"><i class="bi bi-mortarboard-fill"></i> สำหรับนักเรียน — บันทึกด้วยตนเอง</div>' +
+      '<div class="lf-self-grid">' +
+        '<button type="button" class="lf-self-btn amber" data-selfsvc="late"><i class="bi bi-clock-history"></i><span>บันทึกมาสาย</span></button>' +
+        '<button type="button" class="lf-self-btn sky" data-selfsvc="leave"><i class="bi bi-house-heart"></i><span>ขออนุญาตกลับบ้าน</span></button>' +
+      '</div><div class="lf-self-note">นักเรียนกรอกรหัสตนเอง ไม่ต้องเข้าสู่ระบบ</div></div>' : '';
     root.innerHTML =
       '<div class="lf-stage"><div class="lf-mesh"></div><div class="lf-win">' +
         '<div class="lf-brand"><div class="lf-logo"><i class="bi bi-shield-check"></i></div>' +
@@ -1007,7 +1087,7 @@ button{font-family:inherit}
             '<button class="btn btn-primary btn-lg lf-submit" type="submit" id="lf-btn"><i class="bi bi-box-arrow-in-right"></i> เข้าสู่ระบบ</button>' +
           '</form>' +
           '<div class="lf-links">' + (showManual ? '<button class="lf-link" data-action="open-manual"><i class="bi bi-journal-text"></i> คู่มือการใช้ระบบ</button>' : '<span></span>') + '<button class="lf-link" data-forgot>ลืมรหัสผ่าน?</button></div>' +
-          demoCards +
+          selfSvc + demoCards +
           '<div class="lf-foot"><span>© ' + new Date().getFullYear() + ' ' + esc(app.name || 'SAM') + '</span><a href="' + esc((app.dev || {}).url || '#') + '" target="_blank" rel="noopener noreferrer"><img src="' + esc((app.dev || {}).logo || '') + '" referrerpolicy="no-referrer" class="lh"> ' + esc((app.dev || {}).name || '') + '</a></div>' +
         '</div>' +
       '</div></div>';
@@ -1035,10 +1115,79 @@ button{font-family:inherit}
   }
   A.renderLogin = renderLogin;
 
-  // demo card wiring via delegation-like (attach to app-root each render) — handled globally
+  // ── student self-service (บันทึกมาสาย/ลากลับเอง · ไม่ต้องล็อกอิน) ──
+  function openSelfService(kind) {
+    stopClock(); stopNotif();
+    var b = Store.boot, s = b.settings || {};
+    if (String(s.self_service || 'yes').toLowerCase() !== 'yes') { toast('ระบบบันทึกด้วยตนเองปิดใช้งานอยู่', 'warning'); return; }
+    var isLate = kind === 'late';
+    var reasons = String((isLate ? s.late_reasons : s.leave_reasons) || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    var relations = String(s.relations || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    var st = { student: null, reason: reasons[0] || '', relation: relations[0] || '' };
+    var root = el('app-root'); root.className = '';
+    root.innerHTML =
+      '<div class="ss-stage"><div class="ss-card">' +
+        '<div class="ss-head ' + (isLate ? 'amber' : 'sky') + '"><button class="ss-back" data-ssback aria-label="กลับ"><i class="bi bi-arrow-left"></i></button>' +
+          '<div class="ss-ht"><i class="bi bi-' + (isLate ? 'clock-history' : 'house-heart') + '"></i> ' + (isLate ? 'นักเรียนบันทึกมาสาย' : 'นักเรียนขออนุญาตกลับบ้าน') + '</div>' +
+          '<div class="ss-hs">กรอกรหัสนักเรียนของตนเองแล้วกดค้นหา</div></div>' +
+        '<div class="ss-body"><form id="ss-form" autocomplete="off"><div class="ss-inrow"><input class="ss-input" id="ss-id" inputmode="numeric" enterkeyhint="search" placeholder="รหัสนักเรียน เช่น 30001"><button type="submit" class="ss-go" aria-label="ค้นหา"><i class="bi bi-search"></i></button></div></form>' +
+          '<div id="ss-content"></div></div>' +
+      '</div></div>';
+    var idInp = $('#ss-id'), frm = $('#ss-form'), autoT = null;
+    setTimeout(function () { try { idInp.focus(); } catch (e) {} }, 120);
+    function lookup() {
+      if (autoT) { clearTimeout(autoT); autoT = null; }
+      var id = idInp.value.trim(); if (!id) return;
+      Spinner.show('กำลังค้นหานักเรียน…');
+      call('public.student_lookup', { id: id }).then(function (d) {
+        Spinner.hide(); st.student = d.student; st.reason = reasons[0] || ''; renderStep(d);
+      }).catch(function (e) { Spinner.hide(); toast(e.message, 'error'); try { idInp.focus(); idInp.select(); } catch (x) {} });
+    }
+    frm.addEventListener('submit', function (e) { e.preventDefault(); lookup(); });
+    idInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
+    idInp.addEventListener('input', function () { if (autoT) clearTimeout(autoT); var v = idInp.value.trim(); if (v.length >= 4 && /^\d+$/.test(v)) autoT = setTimeout(lookup, 650); });
+    $('[data-ssback]').addEventListener('click', function () { renderLogin(); });
+
+    function renderStep(d) {
+      var s2 = d.student;
+      var reasonGrid = '<div class="ss-reasons">' + reasons.map(function (r) { return '<button type="button" class="ss-rbtn' + (r === st.reason ? ' on' : '') + '" data-ssreason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div>';
+      var guardianFields = isLate ? '' :
+        '<div class="ss-field"><label>ชื่อผู้ปกครองที่มารับ *</label><input class="ss-tin" id="ss-guardian" placeholder="ชื่อ-สกุลผู้ปกครอง"></div>' +
+        '<div class="ss-field"><label>ความเกี่ยวข้อง</label><div class="ss-reasons">' + relations.map(function (r) { return '<button type="button" class="ss-rbtn' + (r === st.relation ? ' on' : '') + '" data-ssrel="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div></div>' +
+        '<div class="ss-field"><label>เบอร์โทรผู้ปกครอง (ถ้ามี)</label><input class="ss-tin" id="ss-phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>';
+      $('#ss-content').innerHTML =
+        '<div class="ss-stu"><div class="ss-av">' + esc(fmt.initials(s2.name)) + '</div><div style="flex:1"><div class="ss-nm">' + esc(s2.name) + '</div><div class="ss-meta">ม.' + esc(s2.class_level) + '/' + esc(s2.room) + ' เลขที่ ' + esc(s2.number) + ' · รหัส ' + esc(s2.id) + '</div></div></div>' +
+        (d.late_today || d.leave_today ? '<div class="ss-warn"><i class="bi bi-info-circle"></i> วันนี้: มาสาย ' + d.late_today + ' · ลากลับ ' + d.leave_today + '</div>' : '') +
+        '<div class="ss-lbl">' + (isLate ? 'เลือกสาเหตุที่มาสาย' : 'เลือกเหตุผลที่ขอกลับ') + '</div>' + reasonGrid + guardianFields +
+        '<button class="btn btn-primary btn-lg btn-block" id="ss-submit"><i class="bi bi-check2-circle"></i> ' + (isLate ? 'ยืนยันบันทึกมาสาย' : 'ยืนยันขออนุญาตกลับบ้าน') + '</button>';
+      $$('[data-ssreason]').forEach(function (btn) { btn.addEventListener('click', function () { $$('[data-ssreason]').forEach(function (x) { x.classList.remove('on'); }); btn.classList.add('on'); st.reason = btn.getAttribute('data-ssreason'); }); });
+      $$('[data-ssrel]').forEach(function (btn) { btn.addEventListener('click', function () { $$('[data-ssrel]').forEach(function (x) { x.classList.remove('on'); }); btn.classList.add('on'); st.relation = btn.getAttribute('data-ssrel'); }); });
+      $('#ss-submit').addEventListener('click', function (ev) { A.runBtn(ev.currentTarget, submit, { loading: 'กำลังบันทึก…', success: 'สำเร็จ' }).catch(function () {}); });
+    }
+    function submit() {
+      if (isLate) return call('public.late_submit', { student_id: st.student.id, reason: st.reason }).then(function (r) { renderDone(r); });
+      var payload = { student_id: st.student.id, reason: st.reason, guardian_name: (($('#ss-guardian') || {}).value || '').trim(), relation: st.relation, guardian_phone: (($('#ss-phone') || {}).value || '').trim() };
+      return call('public.leave_submit', payload).then(function (r) { renderDone(r); });
+    }
+    function renderDone(r) {
+      $('#ss-content').innerHTML =
+        '<div class="ss-done"><div class="ss-check"><i class="bi bi-check-lg"></i></div>' +
+        '<div class="ss-dt">บันทึกเรียบร้อย!</div><div class="ss-ds">' + esc(r.student_name) + ' · เวลา ' + esc(r.time) + ' น.' + (isLate ? '' : ' · รอครูตรวจสอบผู้ปกครอง') + '</div>' +
+        '<div class="ss-dbtns"><button class="btn btn-ghost" id="ss-again"><i class="bi bi-plus-lg"></i> บันทึกอีกคน</button><button class="btn btn-primary" data-ssback2><i class="bi bi-box-arrow-in-right"></i> กลับหน้าเข้าสู่ระบบ</button></div></div>';
+      var f = $('#ss-form'); if (f) f.reset();
+      st.student = null;
+      $('#ss-again').addEventListener('click', function () { $('#ss-content').innerHTML = ''; try { idInp.value = ''; idInp.focus(); } catch (e) {} });
+      $('[data-ssback2]').addEventListener('click', function () { renderLogin(); });
+    }
+  }
+  A.openSelfService = openSelfService;
+
+  // demo card + self-service wiring via delegation (login page)
   document.addEventListener('click', function (e) {
     var d = e.target.closest && e.target.closest('.lf-demo-card');
-    if (d) { e.preventDefault(); doLogin(d.getAttribute('data-demo'), '123456'); }
+    if (d) { e.preventDefault(); doLogin(d.getAttribute('data-demo'), '123456'); return; }
+    var ss = e.target.closest && e.target.closest('[data-selfsvc]');
+    if (ss) { e.preventDefault(); openSelfService(ss.getAttribute('data-selfsvc')); }
   }, false);
 
   // ── manual overlay ──
@@ -1066,7 +1215,10 @@ button{font-family:inherit}
   function navConfig() {
     var role = Store.user ? Store.user.role : '';
     var items = [
-      { cat: 'ภาพรวม', links: [{ h: '#/dashboard', i: 'speedometer2', t: 'แดชบอร์ด', cap: 'report.view_own|report.view_all', grad: 'g-blue' }] },
+      { cat: 'ภาพรวม', links: [
+        { h: '#/dashboard', i: 'speedometer2', t: 'แดชบอร์ด', cap: 'report.view_own|report.view_all', grad: 'g-blue' },
+        { h: '#/board', i: 'display', t: 'กระดานสด (วันนี้)', cap: 'late.view_own|late.view_all|leave.view_own|leave.view_all', grad: 'g-emerald' }
+      ] },
       { cat: 'บันทึกงานปกครอง', links: [
         { h: '#/scan/late', i: 'clock-history', t: 'บันทึกมาสาย', cap: 'late.create', grad: 'g-amber' },
         { h: '#/scan/leave', i: 'house-heart', t: 'ขออนุญาตกลับบ้าน', cap: 'leave.create', grad: 'g-sky' },
@@ -1385,6 +1537,40 @@ button{font-family:inherit}
   }
   A.route('#/dashboard', renderDashboard);
 
+  // ═══ LIVE BOARD — จอแยก 2 ฝั่ง (ซ้ายมาสาย · ขวาลากลับ) เฉพาะวันนี้ · รีเฟรชอัตโนมัติ ═══
+  var BOARD_TIMER = null;
+  function renderBoard() {
+    if (BOARD_TIMER) { clearInterval(BOARD_TIMER); BOARD_TIMER = null; }
+    var p = page();
+    p.innerHTML = hero({ i: 'display', t: 'กระดานสด' }, 'กระดานสรุปวันนี้', 'มาสาย · ลากลับ — แสดงเฉพาะวันนี้ · รีเฟรชอัตโนมัติ · ขึ้นวันใหม่ล้างเอง', null) +
+      '<div class="board-wrap">' +
+        '<div class="board-col"><div class="board-h amber"><span class="bt"><i class="bi bi-clock-history"></i> มาสายวันนี้</span><span class="bc" id="board-late-c">0</span></div><div class="board-body" id="board-late"></div></div>' +
+        '<div class="board-col"><div class="board-h sky"><span class="bt"><i class="bi bi-house-heart"></i> ขอกลับบ้านวันนี้</span><span class="bc" id="board-leave-c">0</span></div><div class="board-body" id="board-leave"></div></div>' +
+      '</div><div class="board-foot" id="board-foot">กำลังโหลด…</div>';
+    loadBoard(false);
+    BOARD_TIMER = setInterval(function () {
+      if (!page() || location.hash !== '#/board') { clearInterval(BOARD_TIMER); BOARD_TIMER = null; return; }
+      loadBoard(true);
+    }, 20000);
+  }
+  function boardItem(r, isLeave) {
+    return '<div class="brow' + (r.self ? ' self' : '') + '"><div class="btime">' + esc(r.time) + '</div>' +
+      '<div class="bmain"><div class="bnm">' + esc(r.name) + (r.self ? ' <span class="bself">นักเรียนบันทึก</span>' : '') + '</div>' +
+      '<div class="bmeta">' + esc(r.cr) + ' · ' + esc(r.reason || '-') + (isLeave && r.guardian ? ' · ผู้รับ: ' + esc(r.guardian) : '') + '</div></div></div>';
+  }
+  function boardEmpty(t) { return '<div class="board-empty"><i class="bi bi-inbox"></i><div>' + esc(t) + '</div></div>'; }
+  function loadBoard(silent) {
+    if (!silent) { var ff = $('#board-foot'); if (ff) ff.textContent = 'กำลังโหลด…'; }
+    call('board.today', {}).then(function (d) {
+      if (!page() || location.hash !== '#/board') return;
+      $('#board-late-c').textContent = d.late_count; $('#board-leave-c').textContent = d.leave_count;
+      $('#board-late').innerHTML = d.late.length ? d.late.map(function (r) { return boardItem(r, false); }).join('') : boardEmpty('ยังไม่มีรายการมาสายวันนี้');
+      $('#board-leave').innerHTML = d.leave.length ? d.leave.map(function (r) { return boardItem(r, true); }).join('') : boardEmpty('ยังไม่มีรายการขอกลับบ้านวันนี้');
+      $('#board-foot').innerHTML = '<i class="bi bi-broadcast"></i> ' + esc(TH.date(new Date())) + ' · อัปเดตล่าสุด ' + esc(d.server_time) + ' น. · รีเฟรชทุก 20 วินาที';
+    }).catch(function (e) { var ff = $('#board-foot'); if (ff) ff.textContent = e.message; });
+  }
+  A.route('#/board', renderBoard);
+
   // ═══ SCAN FRAMEWORK ═══
   var SCAN = { student: null, reason: '', feed: [], offense: null, offenses: [], photo: '', kind: '' };
 
@@ -1393,13 +1579,20 @@ button{font-family:inherit}
     var p = page();
     p.innerHTML =
       hero({ i: cfg.icon, t: cfg.pill }, cfg.title, cfg.sub, null) +
-      '<div class="scan-wrap"><div class="scan-box"><div class="lbl"><i class="bi bi-upc-scan"></i> ยิงบาร์โค้ด หรือพิมพ์รหัสนักเรียน แล้วกด Enter</div>' +
-        '<input class="scan-input" id="scan-input" inputmode="numeric" autocomplete="off" placeholder="เช่น 30001"></div>' +
+      '<div class="scan-wrap"><form class="scan-box" id="scan-form" autocomplete="off"><div class="lbl"><i class="bi bi-upc-scan"></i> ยิงบาร์โค้ด หรือพิมพ์รหัสนักเรียนแล้วกด Enter / ค้นหา</div>' +
+        '<div class="scan-row"><input class="scan-input" id="scan-input" inputmode="numeric" enterkeyhint="search" autocomplete="off" placeholder="เช่น 30001"><button type="submit" class="scan-go" aria-label="ค้นหา"><i class="bi bi-search"></i></button></div></form>' +
         '<div class="stu-preview" id="scan-preview"></div>' +
         '<div class="scan-feed" id="scan-feed"></div></div>';
-    var inp = $('#scan-input');
+    var inp = $('#scan-input'), frm = $('#scan-form'), autoT = null;
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 100);
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLookup(inp.value.trim(), cfg); } });
+    function go() { if (autoT) { clearTimeout(autoT); autoT = null; } doLookup(inp.value.trim(), cfg); }
+    frm.addEventListener('submit', function (e) { e.preventDefault(); go(); });                 // ★ มือถือ: ปุ่ม "ค้นหา/Go" ยิง submit เสมอ
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    inp.addEventListener('input', function () {                                                 // ★ auto-lookup เมื่อพิมพ์ครบ (กัน Enter บนมือถือไม่ทำงาน + รองรับบาร์โค้ด)
+      if (autoT) clearTimeout(autoT);
+      var v = inp.value.trim();
+      if (v.length >= 4 && /^\d+$/.test(v)) autoT = setTimeout(go, 650);
+    });
     renderFeed();
   }
   function doLookup(id, cfg) {
@@ -1461,20 +1654,17 @@ button{font-family:inherit}
         wireReasons(pv);
         $('#late-save', pv).addEventListener('click', function (ev) {
           var note = $('#late-note', pv).value;
-          A.runBtn(ev.currentTarget, function () { return saveLate(d.student.id, SCAN.reason, note, false); }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
+          A.runBtn(ev.currentTarget, function () { return saveLate(d.student.id, SCAN.reason, note); }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
         });
       }
     });
   });
-  function saveLate(sid, reason, note, force) {
-    return call('late.save', { student_id: sid, reason: reason, note: note, force: force }).then(function (r) {
-      if (r.dup && !force) {
-        return A.confirm({ title: 'บันทึกซ้ำ?', message: r.message, okText: 'บันทึกซ้ำ', danger: true }).then(function (ok) { if (ok) return saveLate(sid, reason, note, true); throw new Error('__cancel'); });
-      }
+  function saveLate(sid, reason, note) {
+    return call('late.save', { student_id: sid, reason: reason, note: note }).then(function (r) {
       var extra = r.auto && r.auto.deducted ? ' (หักคะแนนอัตโนมัติ -' + r.auto.points + ')' : '';
       toast('บันทึกมาสาย: ' + r.student_name + extra, 'success');
       afterSave(r.student_name, 'มาสาย · ' + reason);
-    }).catch(function (e) { if (e.message === '__cancel') return; throw e; });
+    });
   }
 
   // ── SCAN: LEAVE ──
@@ -2038,6 +2228,10 @@ button{font-family:inherit}
           '<div class="grid-2" style="gap:14px"><div class="field"><label>จำนวนครั้ง/สัปดาห์</label><input class="input" type="number" data-set="late_auto_threshold" value="' + esc(s.late_auto_threshold) + '"></div>' +
           '<div class="field"><label>คะแนนที่หัก</label><input class="input" type="number" data-set="late_auto_points" value="' + esc(s.late_auto_points) + '"></div></div>' +
           '<button type="button" class="btn btn-soft btn-sm" id="set-reset-score"><i class="bi bi-arrow-repeat"></i> รีเซ็ตคะแนนทุกคน (ขึ้นปีการศึกษาใหม่)</button></div>' +
+        '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-bell"></i></div><div class="pt">การแจ้งเตือน & บริการนักเรียน</div></div>' +
+          '<div class="field"><label class="switch"><input type="checkbox" data-setck="self_service"' + (String(s.self_service || 'yes') !== 'no' ? ' checked' : '') + '><span class="track"></span> เปิดให้นักเรียนบันทึกมาสาย/ลากลับเองจากหน้าล็อกอิน</label></div>' +
+          '<div class="grid-2" style="gap:14px"><div class="field"><label>แจ้งเตือนเมื่อมาสายสะสมครบ (ครั้ง)</label><input class="input" type="number" data-set="late_alert_count" value="' + esc(s.late_alert_count || '3') + '"></div>' +
+          '<div class="field"><label>เกณฑ์แจ้งเตือนคะแนนถูกหักสะสม (คั่นด้วย ,)</label><input class="input" data-set="behavior_alert_deducted" value="' + esc(s.behavior_alert_deducted || '30,50,60') + '"></div></div></div>' +
         '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-list-ul"></i></div><div class="pt">ตัวเลือก (คั่นด้วยเครื่องหมายจุลภาค ,)</div></div>' +
           '<div class="field"><label>สาเหตุการมาสาย</label><input class="input" data-set="late_reasons" value="' + esc(s.late_reasons) + '"></div>' +
           '<div class="field"><label>สาเหตุการลากลับ</label><input class="input" data-set="leave_reasons" value="' + esc(s.leave_reasons) + '"></div>' +
@@ -2125,6 +2319,6 @@ button{font-family:inherit}
 })();
 </script>
 
-  <!-- build:2026-07-14T02:45:23.946Z -->
+  <!-- build:2026-07-14T09:11:15.124Z -->
 </body>
 </html>

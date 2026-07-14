@@ -15,8 +15,8 @@ var APP = Object.freeze({
   NAME: 'ระบบงานปกครองนักเรียน',
   SHORT: 'SAM',
   TITLE: 'ระบบงานปกครองนักเรียน · Student Affairs',
-  VERSION: '1.0.0',
-  LAST_UPDATED: '2026-07-13',
+  VERSION: '1.0.3',
+  LAST_UPDATED: '2026-07-14',
   ORG: 'โรงเรียนในสังกัด สพฐ.',
   DESCRIPTION: 'ระบบบันทึกมาสาย · ขออนุญาตกลับบ้าน · หักคะแนนความประพฤติ พร้อมรายงานครบวงจร',
   LOGO_ICON: 'shield-check',
@@ -117,7 +117,10 @@ var SETTINGS_DEFAULTS = Object.freeze({
   tg_token: '',
   tg_admin_chat_ids: '',
   tg_notify_leave: 'yes',
-  tg_notify_behavior: 'yes'
+  tg_notify_behavior: 'yes',
+  self_service: 'yes',                 // นักเรียนบันทึกมาสาย/ลากลับเองจากหน้าล็อกอิน
+  late_alert_count: '3',               // แจ้งเตือนเมื่อมาสายสะสมครบ N ครั้ง
+  behavior_alert_deducted: '30,50,60'  // แจ้งเตือนเมื่อคะแนนถูกหักสะสมเกินเกณฑ์ (คั่นด้วย ,)
 });
 // setting ที่ห้ามส่งให้ client ที่ยังไม่ login (sensitive)
 var SETTINGS_SENSITIVE = Object.freeze(['tg_token', 'tg_admin_chat_ids']);

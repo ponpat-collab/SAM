@@ -106,12 +106,9 @@ ok(lk.student.name.indexOf('ทดสอบแก้') >= 0, 'lookup updated nam
 // late
 var lt = api('late.save', adminTok, { student_id: '40001', reason: 'รถติด' });
 ok(lt.ok, 'late saved');
-var lt2 = api('late.save', adminTok, { student_id: '40001', reason: 'ตื่นสาย' });
-ok(lt2.dup === true, 'late dup detected');
-var lt3 = api('late.save', adminTok, { student_id: '40001', reason: 'ตื่นสาย', force: true });
-ok(lt3.ok, 'late force saved');
+try { api('late.save', adminTok, { student_id: '40001', reason: 'ตื่นสาย' }); ok(false, 'late dup should hard-block'); } catch (e) { ok(/ซ้ำในวันเดียวกัน/.test(e.message), 'late dup hard-blocked (ห้ามซ้ำวันเดียวกัน)'); }
 var lateList = api('late.list', adminTok, {});
-ok(lateList.total >= 2, 'late list total>=2');
+ok(lateList.total >= 1, 'late list total>=1');
 
 // leave
 var lv = api('leave.save', adminTok, { student_id: '40002', reason: 'ป่วย', guardian_name: 'นายพ่อ ดี', relation: 'บิดา', guardian_phone: '0812345678' });
@@ -133,6 +130,10 @@ var firstBeh = behList.items.filter(function (r) { return r.kind === 'deduct'; }
 api('behavior.cancel', adminTok, { id: firstBeh.id });
 var stu2 = DB_get(SHEETS.STUDENTS, '40001');
 ok(Number(stu2.score) === 110 || Number(stu2.score) === 100, 'cancel deduct restores (clamped): ' + stu2.score);
+
+// เพิ่มมาสายอีกคน (วันนี้) ให้ยอดวันนี้ >= 2 (40001 + 40008) — 40002 เว้นไว้ให้ public test
+api('student.save', adminTok, { is_new: true, id: '40008', prefix: 'เด็กหญิง', first_name: 'สอง', last_name: 'คน', class_level: '3', room: '1', number: '8', advisor_name: 'ครูเอ' });
+api('late.save', adminTok, { student_id: '40008', reason: 'รถติด' });
 
 // dashboard
 var dash = api('report.dashboard', adminTok, {});
@@ -190,6 +191,34 @@ ok(au.items.length > 5, 'audit log recorded (' + au.total + ')');
 // notify: leave triggered notif to admin? (tg off, but in-app pushRoles not called in leave — skip). test notify list works
 var nf = api('notify.list', adminTok, {});
 ok(Array.isArray(nf.items), 'notify list ok');
+
+// ── NEW: self-service สาธารณะ (ไม่ต้องล็อกอิน) ──
+var pl = api('public.student_lookup', '', { id: '40002' });
+ok(pl.student && pl.student.name && pl.student.class_level, 'public lookup works (ไม่ต้องล็อกอิน)');
+var ps = api('public.late_submit', '', { student_id: '40002', reason: 'ตื่นสาย' });
+ok(ps.ok && ps.student_name, 'public late submit (นักเรียนบันทึกเอง)');
+try { api('public.late_submit', '', { student_id: '40002' }); ok(false, 'public late dup should block'); } catch (e) { ok(/ซ้ำ/.test(e.message), 'public late dup hard-blocked'); }
+var pv2 = api('public.leave_submit', '', { student_id: '40002', guardian_name: 'นายพ่อ ดี', reason: 'ป่วย' });
+ok(pv2.ok, 'public leave submit');
+try { api('public.leave_submit', '', { student_id: '40002', guardian_name: '' }); ok(false, 'public leave needs guardian'); } catch (e) { ok(/ผู้ปกครอง/.test(e.message), 'public leave requires guardian'); }
+
+// ── NEW: board.today (เฉพาะวันนี้) ──
+var bd = api('board.today', adminTok, {});
+ok(Array.isArray(bd.late) && Array.isArray(bd.leave) && bd.date, 'board.today returns lists + date');
+ok(bd.late_count >= 1 && bd.leave_count >= 1, 'board shows today records (late=' + bd.late_count + ' leave=' + bd.leave_count + ')');
+ok(bd.late.some(function (r) { return r.self === true; }), 'board marks self-reported records');
+
+// ── NEW: มาสายสะสมครบเกณฑ์ → แจ้งเตือน (คนละวัน) ──
+api('student.save', adminTok, { is_new: true, id: '40009', prefix: 'เด็กชาย', first_name: 'บ่อย', last_name: 'สาย', class_level: '3', room: '1', number: '9', advisor_name: 'ครูเอ' });
+api('late.save', adminTok, { student_id: '40009', reason: 'x', date: '2026-07-10' });
+api('late.save', adminTok, { student_id: '40009', reason: 'x', date: '2026-07-11' });
+var beforeN = api('notify.list', adminTok, {}).items.length;
+api('late.save', adminTok, { student_id: '40009', reason: 'x', date: '2026-07-12' });   // ครั้งที่ 3 → crossing
+var lateAlert = api('notify.list', adminTok, {}).items;
+ok(lateAlert.length > beforeN && lateAlert.some(function (n) { return /มาสายสะสมครบ/.test(n.title); }), 'late frequency alert (ครบ 3) แจ้งเตือน');
+
+// ── NEW: หักคะแนนสะสมข้ามเกณฑ์ 30 → แจ้งเตือน (40001 ถูกหัก 40 → คงเหลือ 60) ──
+ok(api('notify.list', adminTok, {}).items.some(function (n) { return /หักเกิน 30/.test(n.title); }), 'behavior deduct alert (เกิน 30) แจ้งเตือน');
 
 // logout
 api('auth.logout', adminTok, {});

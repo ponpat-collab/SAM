@@ -454,6 +454,10 @@
           '<div class="grid-2" style="gap:14px"><div class="field"><label>จำนวนครั้ง/สัปดาห์</label><input class="input" type="number" data-set="late_auto_threshold" value="' + esc(s.late_auto_threshold) + '"></div>' +
           '<div class="field"><label>คะแนนที่หัก</label><input class="input" type="number" data-set="late_auto_points" value="' + esc(s.late_auto_points) + '"></div></div>' +
           '<button type="button" class="btn btn-soft btn-sm" id="set-reset-score"><i class="bi bi-arrow-repeat"></i> รีเซ็ตคะแนนทุกคน (ขึ้นปีการศึกษาใหม่)</button></div>' +
+        '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-bell"></i></div><div class="pt">การแจ้งเตือน & บริการนักเรียน</div></div>' +
+          '<div class="field"><label class="switch"><input type="checkbox" data-setck="self_service"' + (String(s.self_service || 'yes') !== 'no' ? ' checked' : '') + '><span class="track"></span> เปิดให้นักเรียนบันทึกมาสาย/ลากลับเองจากหน้าล็อกอิน</label></div>' +
+          '<div class="grid-2" style="gap:14px"><div class="field"><label>แจ้งเตือนเมื่อมาสายสะสมครบ (ครั้ง)</label><input class="input" type="number" data-set="late_alert_count" value="' + esc(s.late_alert_count || '3') + '"></div>' +
+          '<div class="field"><label>เกณฑ์แจ้งเตือนคะแนนถูกหักสะสม (คั่นด้วย ,)</label><input class="input" data-set="behavior_alert_deducted" value="' + esc(s.behavior_alert_deducted || '30,50,60') + '"></div></div></div>' +
         '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-list-ul"></i></div><div class="pt">ตัวเลือก (คั่นด้วยเครื่องหมายจุลภาค ,)</div></div>' +
           '<div class="field"><label>สาเหตุการมาสาย</label><input class="input" data-set="late_reasons" value="' + esc(s.late_reasons) + '"></div>' +
           '<div class="field"><label>สาเหตุการลากลับ</label><input class="input" data-set="leave_reasons" value="' + esc(s.leave_reasons) + '"></div>' +

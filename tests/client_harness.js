@@ -53,6 +53,8 @@ setTimeout(function () {
   ok(!!doc.querySelector('.lf-stage'), 'login screen rendered');
   ok(!!doc.querySelector('.lf-demo-card'), 'demo cards rendered');
   ok(!!doc.querySelector('#lf-form'), 'login form present');
+  ok(!!doc.querySelector('[data-selfsvc="late"]') && !!doc.querySelector('[data-selfsvc="leave"]'), 'self-service buttons on login');
+  ok(!!win.SAM.Routes['#/board'], 'live board route registered');
 
   // simulate admin login (shim jsdom form named-access — Chrome supports natively)
   var uf = doc.querySelector('#lf-form');

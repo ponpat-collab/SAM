@@ -16,25 +16,49 @@ function Late_save(user, p) {
   var stu = DB_get(SHEETS.STUDENTS, sid);
   if (!stu) throw new Error('ไม่พบรหัสนักเรียน ' + sid);
   if (!_canSeeStudent_(user, stu)) throw new Error('นักเรียนคนนี้อยู่นอกห้องที่คุณดูแล');
-  var reason = cfg_str_(p && p.reason, 60).trim() || 'ไม่ระบุ';
-  var note = cfg_str_(p && p.note, 200).trim();
-  var date = cfg_dateOnly_((p && p.date) || new Date()) || cfg_today_();
-  var force = _yes_(p && p.force);
-  // dup guard (same student, same day)
+  var rec = _lateCreateCore_(stu, {
+    reason: cfg_str_(p && p.reason, 60).trim() || 'ไม่ระบุ',
+    note: cfg_str_(p && p.note, 200).trim(),
+    date: cfg_dateOnly_((p && p.date) || new Date()) || cfg_today_(),
+    createdBy: user.id, createdByName: user.full_name
+  });
+  Audit_log_(user, 'late.create', 'late', rec.id, { student_id: sid });
+  var map = Settings_map_(), auto = null;
+  if (_yes_(map.late_auto_deduct)) auto = _lateAutoDeduct_(user, stu, map);
+  return { ok: true, record: rec, student_name: _stuName_(stu), auto: auto };
+}
+
+// core สร้างบันทึกมาสาย — hard-block ซ้ำวันเดียวกัน + แจ้งเตือนสะสม (ใช้ร่วมทั้ง staff + self-service)
+function _lateCreateCore_(stu, opt) {
+  var sid = stu.id;
+  var date = opt.date || cfg_today_();
   var dup = DB_byLite(SHEETS.LATE, 'student_id', sid).filter(function (r) { return cfg_d10_(r.date) === date && !_yes_(r.canceled); });
-  if (dup.length && !force) return { ok: false, dup: true, message: 'นักเรียนคนนี้ถูกบันทึกมาสายในวันนี้แล้ว (' + dup.length + ' ครั้ง) — กดยืนยันเพื่อบันทึกซ้ำ' };
+  if (dup.length) throw new Error('นักเรียนคนนี้ถูกบันทึกมาสายในวันนี้แล้ว — บันทึกซ้ำในวันเดียวกันไม่ได้');
   var rec;
   DB_withLock_(function () {
     rec = DB_insert(SHEETS.LATE, {
       id: _genSeq_('L', DB_rowCount(SHEETS.LATE)), date: date, time: cfg_timeNow_(), student_id: sid,
-      reason: reason, note: note, created_by: user.id, created_by_name: user.full_name, canceled: 'no'
+      reason: opt.reason || 'ไม่ระบุ', note: opt.note || '',
+      created_by: opt.createdBy || '', created_by_name: opt.createdByName || '', canceled: 'no'
     });
   });
-  Audit_log_(user, 'late.create', 'late', rec.id, { student_id: sid });
-  // auto deduct
-  var map = Settings_map_(), auto = null;
-  if (_yes_(map.late_auto_deduct)) auto = _lateAutoDeduct_(user, stu, map);
-  return { ok: true, record: rec, student_name: _stuName_(stu), auto: auto };
+  _lateFrequencyAlert_(stu, sid);
+  return rec;
+}
+
+// แจ้งเตือนเมื่อมาสายสะสมครบเกณฑ์ (ยิงครั้งเดียวตอน "ครบพอดี")
+function _lateFrequencyAlert_(stu, sid) {
+  try {
+    var map = Settings_map_();
+    var th = cfg_int_(map.late_alert_count) || 3;
+    if (th <= 0) return;
+    var cnt = DB_byLite(SHEETS.LATE, 'student_id', sid).filter(function (r) { return !_yes_(r.canceled); }).length;
+    if (cnt !== th) return;                       // crossing เท่านั้น กัน spam
+    var title = 'มาสายสะสมครบ ' + th + ' ครั้ง';
+    var msg = _stuName_(stu) + ' (' + _stuClassRoom_(stu) + ') มาสายสะสม ' + cnt + ' ครั้ง — ควรติดตามดูแล';
+    Notify_pushRoles_(['admin', 'teacher'], 'late', title, msg, '#/report/student?id=' + sid);
+    if (_yes_(map.tg_enabled)) Telegram_toAdmins_('⏰ <b>' + _tgEsc_(title) + '</b>\n' + _tgEsc_(msg));
+  } catch (e) {}
 }
 
 function _weekKey_(dateStr) {

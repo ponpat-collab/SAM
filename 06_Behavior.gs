@@ -121,7 +121,26 @@ function Behavior_save(user, p) {
         _tgEsc_(offenseName) + ' · ' + (signed > 0 ? '+' : '') + signed + ' คะแนน\nคงเหลือ ' + scoreAfter + ' คะแนน · โดย ' + _tgEsc_(user.full_name));
     }
   } catch (e) {}
+  _behaviorDeductAlert_(stu, scoreAfter, scoreAfter - signed, map);
   return { ok: true, record: rec, student_name: _stuName_(stu), score_after: scoreAfter, alert: alert };
+}
+
+// แจ้งเตือนเมื่อคะแนนถูกหักสะสม "ข้ามเกณฑ์" 30/50/60 (ยิงครั้งเดียวต่อการข้ามเกณฑ์)
+function _behaviorDeductAlert_(stu, scoreAfter, scoreBefore, map) {
+  try {
+    var start = cfg_num_(map.start_score) || 100;
+    var dedAfter = start - scoreAfter, dedBefore = start - scoreBefore;
+    if (dedAfter <= dedBefore) return;            // คะแนนไม่ได้ลด (เพิ่ม/เท่าเดิม)
+    var ths = String(map.behavior_alert_deducted || '30,50,60').split(',')
+      .map(function (x) { return cfg_num_(x); }).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
+    var crossed = null;
+    ths.forEach(function (T) { if (dedBefore < T && dedAfter >= T) crossed = T; });   // เกณฑ์สูงสุดที่ข้าม
+    if (crossed == null) return;
+    var title = 'คะแนนพฤติกรรมถูกหักเกิน ' + crossed + ' คะแนน';
+    var msg = _stuName_(stu) + ' (' + _stuClassRoom_(stu) + ') ถูกหักสะสม ' + dedAfter + ' คะแนน (คงเหลือ ' + scoreAfter + ') — ควรดำเนินการตามระเบียบ';
+    Notify_pushRoles_(['admin', 'teacher'], 'behavior', title, msg, '#/report/student?id=' + stu.id);
+    if (_yes_(map.tg_enabled)) Telegram_toAdmins_('⚠️ <b>' + _tgEsc_(title) + '</b>\n' + _tgEsc_(msg));
+  } catch (e) {}
 }
 
 function Behavior_autoDeduct_(user, sid, pts, detail) {

@@ -171,3 +171,22 @@ function Reports_period(user, p) {
     offenses: topN(offenses, 8), top_students: topStudents
   };
 }
+
+// ── Live Board — จอแยก 2 ฝั่ง (ซ้าย=มาสาย · ขวา=ลากลับ) เฉพาะวันนี้ · ขึ้นวันใหม่ว่างอัตโนมัติ ──
+function Board_today(user, p) {
+  if (!hasCap_(user.role, 'late.view_all') && !hasCap_(user.role, 'late.view_own') &&
+      !hasCap_(user.role, 'leave.view_all') && !hasCap_(user.role, 'leave.view_own')) throw new Error('คุณไม่มีสิทธิ์ดูกระดานสรุป');
+  var today = cfg_today_();
+  var stuIdx = DB_buildIndexLite(SHEETS.STUDENTS);
+  function stuOf(sid) { return stuIdx[String(sid)] || null; }
+  function inScope(sid) { var s = stuOf(sid); return s && _canSeeStudent_(user, s); }
+  function isSelf(r) { return String(r.created_by_name || '').indexOf('นักเรียน') === 0; }
+  function byTimeDesc(a, b) { return a.time < b.time ? 1 : (a.time > b.time ? -1 : 0); }
+  var late = DB_readLite(SHEETS.LATE).filter(function (r) { return cfg_d10_(r.date) === today && !_yes_(r.canceled) && inScope(r.student_id); })
+    .map(function (r) { var s = stuOf(r.student_id); return { id: r.id, name: _stuName_(s), cr: _stuClassRoom_(s), time: String(r.time || '').slice(0, 5), reason: r.reason || '', self: isSelf(r) }; })
+    .sort(byTimeDesc);
+  var leave = DB_readLite(SHEETS.LEAVE).filter(function (r) { return cfg_d10_(r.date) === today && !_yes_(r.canceled) && inScope(r.student_id); })
+    .map(function (r) { var s = stuOf(r.student_id); return { id: r.id, name: _stuName_(s), cr: _stuClassRoom_(s), time: String(r.time || '').slice(0, 5), reason: r.reason || '', guardian: r.guardian_name || '', self: isSelf(r) }; })
+    .sort(byTimeDesc);
+  return { date: today, late: late, leave: leave, late_count: late.length, leave_count: leave.length, server_time: cfg_timeNow_() };
+}

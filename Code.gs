@@ -63,6 +63,11 @@ function _dispatch_(req) {
   if (action === 'app.bootstrap') return Auth_bootstrap(token);
   if (action === 'auth.login') return Auth_login(payload);
 
+  // ── public self-service (นักเรียนบันทึกเอง · ไม่ต้องล็อกอิน) ──
+  if (action === 'public.student_lookup') return Public_studentLookup(payload);
+  if (action === 'public.late_submit') return Public_lateSubmit(payload);
+  if (action === 'public.leave_submit') return Public_leaveSubmit(payload);
+
   var user = Auth_verify_(token);
   switch (action) {
     case 'auth.logout': return Auth_logout(user, token);
@@ -98,6 +103,7 @@ function _dispatch_(req) {
     case 'report.student': return Reports_student(user, payload);
     case 'report.room': return Reports_room(user, payload);
     case 'report.period': return Reports_period(user, payload);
+    case 'board.today': return Board_today(user, payload);
 
     case 'setting.get': return Settings_get(user, payload);
     case 'setting.update': return Settings_update(user, payload);

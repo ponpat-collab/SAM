@@ -228,4 +228,78 @@
   .sp-stats{grid-template-columns:1fr}
   .lp-grid{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ── scan row (input + ปุ่มค้นหา — แก้ Enter บนมือถือ) ── */
+.scan-row{display:flex;gap:10px;align-items:stretch}
+.scan-row .scan-input{flex:1;min-width:0}
+.scan-go{flex:0 0 58px;border:0;border-radius:14px;background:var(--grad);color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(37,99,235,.28)}
+.scan-go:active{transform:translateY(1px)}
+
+/* ── Live Board (จอแยก 2 ฝั่ง) ── */
+.board-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+.board-col{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;min-height:60vh}
+.board-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;color:#fff}
+.board-h.amber{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
+.board-h.sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8)}
+.board-h .bt{font-family:'Kanit';font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+.board-h .bc{font-family:'Kanit';font-weight:800;font-size:26px;min-width:44px;text-align:center;background:rgba(255,255,255,.22);border-radius:12px;padding:2px 10px}
+.board-body{flex:1;overflow-y:auto;padding:10px}
+.brow{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;border:1px solid var(--line2);margin-bottom:8px;animation:popin .2s ease}
+.brow.self{border-color:#bfdbfe;background:#f5faff}
+.btime{flex:0 0 52px;font-family:'Kanit';font-weight:800;font-size:16px;color:var(--blue);text-align:center}
+.bmain{flex:1;min-width:0}
+.bnm{font-weight:700;font-size:14.5px;color:var(--ink);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bself{font-size:10.5px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:99px;padding:1px 8px}
+.bmeta{font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.board-empty{text-align:center;color:var(--muted);padding:44px 12px}
+.board-empty i{font-size:40px;display:block;margin-bottom:8px;opacity:.5}
+.board-foot{text-align:center;color:var(--ink2);font-size:12.5px;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px}
+@media(max-width:720px){.board-wrap{grid-template-columns:1fr}.board-col{min-height:44vh}}
+
+/* ── login: ปุ่ม self-service สำหรับนักเรียน ── */
+.lf-self{margin-top:16px;padding:14px;border:1.5px dashed var(--line);border-radius:16px;background:#fafcff}
+.lf-self-h{font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.lf-self-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lf-self-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:15px 8px;border:0;border-radius:14px;color:#fff;cursor:pointer;font-family:'Kanit';font-weight:700;font-size:13.5px;transition:transform .12s,box-shadow .12s}
+.lf-self-btn i{font-size:24px}
+.lf-self-btn.amber{background:linear-gradient(135deg,#f59e0b,#fbbf24);box-shadow:0 8px 18px rgba(245,158,11,.3)}
+.lf-self-btn.sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8);box-shadow:0 8px 18px rgba(14,165,233,.3)}
+.lf-self-btn:hover{transform:translateY(-2px)}
+.lf-self-btn:active{transform:translateY(0)}
+.lf-self-note{text-align:center;font-size:11px;color:var(--muted);margin-top:8px}
+
+/* ── self-service full-screen (นักเรียน) ── */
+.ss-stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(1200px 600px at 50% -10%,#eaf2ff,#f6f9ff)}
+.ss-card{width:100%;max-width:460px;background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,.16)}
+.ss-head{position:relative;padding:22px 20px 20px;color:#fff;text-align:center}
+.ss-head.amber{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
+.ss-head.sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8)}
+.ss-back{position:absolute;left:14px;top:16px;width:38px;height:38px;border:0;border-radius:11px;background:rgba(255,255,255,.22);color:#fff;font-size:18px;cursor:pointer}
+.ss-ht{font-family:'Kanit';font-weight:800;font-size:19px;display:flex;align-items:center;justify-content:center;gap:8px}
+.ss-hs{font-size:12.5px;opacity:.92;margin-top:4px}
+.ss-body{padding:20px}
+.ss-inrow{display:flex;gap:10px}
+.ss-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:14px;padding:15px 16px;font-size:24px;font-weight:700;font-family:'Kanit';text-align:center;letter-spacing:.12em;color:var(--ink)}
+.ss-input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.14)}
+.ss-go{flex:0 0 56px;border:0;border-radius:14px;background:var(--grad);color:#fff;font-size:21px;cursor:pointer}
+.ss-stu{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:14px;margin:16px 0}
+.ss-av{width:48px;height:48px;border-radius:12px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Kanit'}
+.ss-nm{font-weight:700;font-size:16px;color:var(--ink)}
+.ss-meta{font-size:12.5px;color:var(--ink2);margin-top:2px}
+.ss-warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.ss-lbl{font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:9px}
+.ss-reasons{display:flex;flex-wrap:wrap;gap:8px}
+.ss-rbtn{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:11px;padding:10px 14px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:'Kanit'}
+.ss-rbtn.on{background:var(--grad);color:#fff;border-color:transparent}
+.ss-field{margin-top:14px}
+.ss-field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.ss-tin{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;font-family:'Sarabun';color:var(--ink)}
+.ss-tin:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+#ss-submit{margin-top:18px}
+.ss-done{text-align:center;padding:20px 6px}
+.ss-check{width:76px;height:76px;margin:0 auto 14px;border-radius:50%;background:linear-gradient(135deg,#10b981,#34d399);color:#fff;display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 12px 28px rgba(16,185,129,.36);animation:popin .3s ease}
+.ss-dt{font-family:'Kanit';font-weight:800;font-size:20px;color:var(--ink)}
+.ss-ds{font-size:13px;color:var(--ink2);margin-top:6px}
+.ss-dbtns{display:flex;gap:10px;margin-top:20px}
+.ss-dbtns .btn{flex:1}
 </style>
