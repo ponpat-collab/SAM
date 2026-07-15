@@ -104,6 +104,7 @@ function _dispatch_(req) {
     case 'report.room': return Reports_room(user, payload);
     case 'report.period': return Reports_period(user, payload);
     case 'board.today': return Board_today(user, payload);
+    case 'nav.counts': return Nav_counts(user, payload);
 
     case 'setting.get': return Settings_get(user, payload);
     case 'setting.update': return Settings_update(user, payload);

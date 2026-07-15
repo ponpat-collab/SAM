@@ -141,6 +141,9 @@ button{font-family:inherit}
 .sb-link i{font-size:17px;width:20px;text-align:center}
 .sb-link:hover{background:rgba(255,255,255,.06);color:#fff}
 .sb-link.active{background:linear-gradient(90deg,rgba(56,189,248,.22),rgba(56,189,248,.04));color:#fff}
+.sb-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-badge{margin-left:auto;flex:0 0 auto;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff;font-size:11px;font-weight:800;font-family:'Kanit';display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(14,165,233,.4)}
+.sb-badge[hidden]{display:none}
 .sb-link.active::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--blue3);box-shadow:0 0 8px var(--blue3)}
 .sb-link.is-logout{color:#fca5a5}.sb-link.is-logout:hover{background:rgba(239,68,68,.14);color:#fecaca}
 .sb-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px}
@@ -1217,18 +1220,18 @@ button{font-family:inherit}
     var items = [
       { cat: 'ภาพรวม', links: [
         { h: '#/dashboard', i: 'speedometer2', t: 'แดชบอร์ด', cap: 'report.view_own|report.view_all', grad: 'g-blue' },
-        { h: '#/board', i: 'display', t: 'กระดานสด (วันนี้)', cap: 'late.view_own|late.view_all|leave.view_own|leave.view_all', grad: 'g-emerald' }
+        { h: '#/board', i: 'display', t: 'กระดานสด (วันนี้)', cap: 'late.view_own|late.view_all|leave.view_own|leave.view_all', grad: 'g-emerald', bdg: 'board' }
       ] },
       { cat: 'บันทึกงานปกครอง', links: [
-        { h: '#/scan/late', i: 'clock-history', t: 'บันทึกมาสาย', cap: 'late.create', grad: 'g-amber' },
-        { h: '#/scan/leave', i: 'house-heart', t: 'ขออนุญาตกลับบ้าน', cap: 'leave.create', grad: 'g-sky' },
-        { h: '#/scan/behavior', i: 'star', t: 'หักคะแนนความประพฤติ', cap: 'behavior.create', grad: 'g-rose' }
+        { h: '#/scan/late', i: 'clock-history', t: 'บันทึกมาสาย', cap: 'late.create', grad: 'g-amber', bdg: 'late' },
+        { h: '#/scan/leave', i: 'house-heart', t: 'ขออนุญาตกลับบ้าน', cap: 'leave.create', grad: 'g-sky', bdg: 'leave' },
+        { h: '#/scan/behavior', i: 'star', t: 'หักคะแนนความประพฤติ', cap: 'behavior.create', grad: 'g-rose', bdg: 'behavior' }
       ] },
       { cat: 'ข้อมูลและรายการ', links: [
         { h: '#/students', i: 'people-fill', t: 'ข้อมูลนักเรียน', cap: 'student.view_own|student.view_all', grad: 'g-indigo' },
-        { h: '#/records/late', i: 'list-check', t: 'รายการมาสาย', cap: 'late.view_own|late.view_all', grad: 'g-amber' },
-        { h: '#/records/leave', i: 'card-checklist', t: 'รายการลากลับ', cap: 'leave.view_own|leave.view_all', grad: 'g-sky' },
-        { h: '#/records/behavior', i: 'journal-text', t: 'รายการหักคะแนน', cap: 'behavior.view_own|behavior.view_all', grad: 'g-rose' }
+        { h: '#/records/late', i: 'list-check', t: 'รายการมาสาย', cap: 'late.view_own|late.view_all', grad: 'g-amber', bdg: 'late' },
+        { h: '#/records/leave', i: 'card-checklist', t: 'รายการลากลับ', cap: 'leave.view_own|leave.view_all', grad: 'g-sky', bdg: 'leave' },
+        { h: '#/records/behavior', i: 'journal-text', t: 'รายการหักคะแนน', cap: 'behavior.view_own|behavior.view_all', grad: 'g-rose', bdg: 'behavior' }
       ] },
       { cat: 'รายงาน', links: [
         { h: '#/report/room', i: 'building', t: 'รายงานรายห้อง', cap: 'report.view_own|report.view_all', grad: 'g-emerald' },
@@ -1278,7 +1281,8 @@ button{font-family:inherit}
     var groups = navConfig();
     var sbNav = groups.map(function (g) {
       return '<div class="sb-cat">' + esc(g.cat) + '</div>' + g.links.map(function (l) {
-        return '<a class="sb-link" href="' + l.h + '" data-navlink="' + l.h + '"><i class="bi bi-' + l.i + '"></i> ' + esc(l.t) + '</a>';
+        var badge = l.bdg ? '<span class="sb-badge" data-nb="' + l.bdg + '" hidden>0</span>' : '';
+        return '<a class="sb-link" href="' + l.h + '" data-navlink="' + l.h + '"><i class="bi bi-' + l.i + '"></i> <span class="sb-tx">' + esc(l.t) + '</span>' + badge + '</a>';
       }).join('');
     }).join('');
     var launcher = groups.reduce(function (a, g) { return a.concat(g.links); }, []).map(function (l) {
@@ -1351,6 +1355,19 @@ button{font-family:inherit}
     if (pi) pi.innerHTML = '<i class="bi bi-' + meta[0] + '"></i>'; if (nt) nt.textContent = meta[1]; if (ns) ns.textContent = meta[2];
   }
 
+  // ── badge จำนวนที่บันทึกวันนี้บนเมนู sidebar ──
+  function loadNavBadges() {
+    if (!Store.token || !el('sidebar')) return;
+    call('nav.counts', {}).then(function (c) {
+      if (!el('sidebar')) return;
+      $$('#sidebar .sb-badge[data-nb]').forEach(function (b) {
+        var n = Number(c[b.getAttribute('data-nb')] || 0);
+        if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.hidden = false; } else { b.hidden = true; }
+      });
+    }).catch(function () {});
+  }
+  A.refreshNavBadges = loadNavBadges;
+
   // ── popovers ──
   function togglePop(id) { var p = el(id); if (!p) return; var open = p.classList.contains('show'); closeAllPops(); if (!open) p.classList.add('show'); }
   function closeAllPops() { $$('.pop.show, .launcher-pop.show').forEach(function (p) { p.classList.remove('show'); }); }
@@ -1369,7 +1386,7 @@ button{font-family:inherit}
   }
 
   // ── notifications ──
-  function startNotif() { stopNotif(); Store.notifFirst = true; loadNotif(true); Store.notifTimer = setInterval(function () { loadNotif(false); }, 40000); }
+  function startNotif() { stopNotif(); Store.notifFirst = true; loadNotif(true); loadNavBadges(); Store.notifTimer = setInterval(function () { loadNotif(false); loadNavBadges(); }, 40000); }
   function stopNotif() { if (Store.notifTimer) { clearInterval(Store.notifTimer); Store.notifTimer = null; } }
   function loadNotif(render) {
     if (!Store.token) return;
@@ -1629,6 +1646,7 @@ button{font-family:inherit}
   function afterSave(name, info) {
     SCAN.feed.unshift({ name: name, info: info, time: TH.time(new Date()) });
     renderFeed();
+    if (A.refreshNavBadges) A.refreshNavBadges();
     var pv = $('#scan-preview'); if (pv) pv.classList.remove('show');
     SCAN.student = null; SCAN.photo = '';
     var inp = $('#scan-input'); if (inp) { inp.value = ''; try { inp.focus(); } catch (e) {} }
@@ -2319,6 +2337,6 @@ button{font-family:inherit}
 })();
 </script>
 
-  <!-- build:2026-07-14T09:11:15.124Z -->
+  <!-- build:2026-07-15T01:20:24.913Z -->
 </body>
 </html>

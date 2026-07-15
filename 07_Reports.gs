@@ -190,3 +190,20 @@ function Board_today(user, p) {
     .sort(byTimeDesc);
   return { date: today, late: late, leave: leave, late_count: late.length, leave_count: leave.length, server_time: cfg_timeNow_() };
 }
+
+// ── Nav badge counts — จำนวนที่บันทึกวันนี้ (scoped · cached) สำหรับ badge บนเมนู sidebar ──
+function Nav_counts(user, p) {
+  var today = cfg_today_();
+  var scope = _studentScope_(user) === null ? 'all' : ('u' + user.id);
+  var ver = _verAll_([SHEETS.LATE, SHEETS.LEAVE, SHEETS.BEHAVIOR, SHEETS.STUDENTS]);
+  return Cache_compute_('navc:' + scope + ':' + today + ':v' + ver, 120, function () { return _navCountsCompute_(user, today); });
+}
+function _navCountsCompute_(user, today) {
+  var stuIdx = DB_buildIndexLite(SHEETS.STUDENTS);
+  function inScope(sid) { var s = stuIdx[String(sid)]; return s && _canSeeStudent_(user, s); }
+  function cntToday(sheet) { return DB_readLite(sheet).filter(function (r) { return cfg_d10_(r.date) === today && !_yes_(r.canceled) && inScope(r.student_id); }).length; }
+  var late = (hasCap_(user.role, 'late.view_all') || hasCap_(user.role, 'late.view_own')) ? cntToday(SHEETS.LATE) : 0;
+  var leave = (hasCap_(user.role, 'leave.view_all') || hasCap_(user.role, 'leave.view_own')) ? cntToday(SHEETS.LEAVE) : 0;
+  var behavior = (hasCap_(user.role, 'behavior.view_all') || hasCap_(user.role, 'behavior.view_own')) ? cntToday(SHEETS.BEHAVIOR) : 0;
+  return { late: late, leave: leave, behavior: behavior, board: late + leave };
+}

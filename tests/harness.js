@@ -208,6 +208,11 @@ ok(Array.isArray(bd.late) && Array.isArray(bd.leave) && bd.date, 'board.today re
 ok(bd.late_count >= 1 && bd.leave_count >= 1, 'board shows today records (late=' + bd.late_count + ' leave=' + bd.leave_count + ')');
 ok(bd.late.some(function (r) { return r.self === true; }), 'board marks self-reported records');
 
+// ── NEW: nav.counts (badge เมนู sidebar) ──
+var nc = api('nav.counts', adminTok, {});
+ok(typeof nc.late === 'number' && typeof nc.leave === 'number' && typeof nc.behavior === 'number', 'nav.counts returns numbers');
+ok(nc.board === nc.late + nc.leave && nc.late >= 1, 'nav.counts board = late+leave (badge วันนี้)');
+
 // ── NEW: มาสายสะสมครบเกณฑ์ → แจ้งเตือน (คนละวัน) ──
 api('student.save', adminTok, { is_new: true, id: '40009', prefix: 'เด็กชาย', first_name: 'บ่อย', last_name: 'สาย', class_level: '3', room: '1', number: '9', advisor_name: 'ครูเอ' });
 api('late.save', adminTok, { student_id: '40009', reason: 'x', date: '2026-07-10' });

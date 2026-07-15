@@ -15233,6 +15233,52 @@ function closeLauncher(){ var p=$('#launcher-pop'); if(p) p.remove(); }
 ### เคสครอบคลุม (≥5)
 ระบบที่มีโมดูลเยอะ (ERP · บัญชี · school admin · HR · CRM · POS หลายฟีเจอร์) · dashboard ที่มี quick-access หลายหน้า · multi-tenant ที่เมนูต่างกันต่อ role · admin panel ที่มี setting หลายหมวด · ทุกระบบที่ navbar/sidebar เมนูเกินพื้นที่ — ใช้ waffle launcher แทนการอัดเมนูจนล้น
 
+## 🔢 Sidebar/Nav Count Badges — Live Count บนเมนู (มาตรฐานเมื่อเมนูแทน "รายการที่นับได้")
+เมื่อเมนู sidebar/nav แทน entity ที่ "นับได้และเปลี่ยนบ่อย" (บันทึกวันนี้ · รายการรออนุมัติ · ตะกร้า · ข้อความยังไม่อ่าน · งานค้าง) — <b>ควรมี badge ตัวเลขบนเมนู</b> ให้ผู้ใช้เห็นปริมาณงานทันทีโดยไม่ต้องเข้าไปดู · ลดการคลิกสำรวจ + surface งานที่ต้องทำ
+
+### สถาปัตยกรรม (endpoint เดียว · scoped · version-keyed cache · piggyback poll)
+```
+Backend:  Nav_counts(user) → { late, leave, behavior, board, ... }  (นับ "วันนี้"/สถานะ · scoped ด้วย _canSeeStudent_ · คืน 0 ถ้าไม่มี cap)
+          ห่อ Cache_compute_('navc:'+scope+':'+today+':v'+_verAll_([sheets]), 120, fn)  ← version bump ทุก insert = สดทันที
+Frontend: sb-link มี <span class="sb-badge" data-nb="late" hidden>0</span> (ตาม key ของ nav item)
+          loadNavBadges() → call('nav.counts') → set แต่ละ [data-nb] · >0 แสดง · =0 ซ่อน (b.hidden)
+          refresh: (1) ตอนเข้า shell — เรียกใน startNotif (ไม่สร้าง timer ใหม่) (2) ใน poll เดิม (piggyback 40s) (3) หลัง mutation (afterSave → A.refreshNavBadges())
+```
+
+### กฎเหล็ก
+1. <b>Endpoint เดียว lean + version-keyed cache</b> — `Nav_counts` นับทุก badge ใน call เดียว (ไม่ใช่ 1 call/badge) · cache 120s ผูก `_verAll_` ของ sheet ที่นับ (mutation bump → สดทันที · ไม่ค้าง)
+2. <b>Single-scan ต่อ sheet + scoped</b> — นับด้วย `DB_readLite(sheet).filter(today && !canceled && inScope)` (ไม่ N+1) · advisor เห็นเฉพาะห้องตน (`_canSeeStudent_`) · admin/teacher เห็นทั้งหมด · คืน 0 สำหรับ cap ที่ไม่มี (ไม่รั่วยอดข้ามสิทธิ์)
+3. <b>Piggyback poll เดิม — ห้ามสร้าง timer ใหม่</b> — เรียก `loadNavBadges()` ใน `startNotif()` + ใน interval ของ notify (40s) เดียวกัน · +หลัง mutation (afterSave) ให้ badge เด้งทันทีที่บันทึก
+4. <b>`[hidden]` ต้องมี `display:none` explicit</b> — `.sb-badge{display:flex}` (class 0,1,0) เท่ากับ `[hidden]` (0,1,0) + มาทีหลัง → ชนะ → badge โผล่แม้ hidden · ต้องเขียน `.sb-badge[hidden]{display:none}` คู่เสมอ (ดู pitfall "`[hidden]` ถูก CSS display override")
+5. <b>Layout: label flex + badge `margin-left:auto`</b> — ห่อ label ด้วย `<span class="sb-tx" style="flex:1;min-width:0;ellipsis">` แล้ว badge `margin-left:auto;flex:0 0 auto` (ชิดขวา · ไม่ดัน label)
+6. <b>key ของ badge = data attribute</b> (`data-nb="late"`) map กับ field ที่ endpoint คืน · เพิ่ม badge ใหม่ = เพิ่ม field ใน endpoint + `data-nb` ใน nav item (zero extra wiring)
+7. <b>badge อนุพันธ์รวมได้</b> — เช่น board = late+leave (คำนวณใน endpoint ไม่ใช่ client) เพื่อ single source
+8. <b>ซ่อนเมื่อ 0</b> — badge ว่าง/ศูนย์ต้องซ่อน (ไม่โชว์ "0" รก) · แสดง `99+` เมื่อเกิน 99
+
+### Anti-patterns ห้ามทำ
+- ❌ <b>1 call ต่อ 1 badge</b> — N round-trip ต่อ render (ใช้ endpoint รวม)
+- ❌ <b>สร้าง setInterval ใหม่สำหรับ badge</b> — piggyback poll เดิม (notify) กัน timer ซ้อน + เปลือง quota
+- ❌ <b>`.sb-badge{display:flex}` ไม่มี `[hidden]{display:none}`</b> — badge โผล่ตอนควรซ่อน (specificity)
+- ❌ <b>นับไม่ scoped</b> — advisor เห็นยอดห้องอื่น (rollup ต้อง gate ด้วย scoped map · ดู §S7)
+- ❌ <b>ไม่ cache / cache ไม่ version-keyed</b> — นับใหม่ทุก poll (ช้า) หรือ badge ค้างหลังบันทึก (stale)
+- ❌ <b>ไม่ refresh หลัง mutation</b> — บันทึกแล้ว badge ไม่ขยับจนกว่า poll รอบถัดไป (UX งง)
+- ❌ <b>แสดง "0"</b> — รกตา · ซ่อนเมื่อว่าง
+
+### Verification checklist
+```
+□ Nav_counts endpoint เดียว คืนทุก badge · scoped (_canSeeStudent_) · คืน 0 ถ้าไม่มี cap
+□ ห่อ Cache_compute_ version-keyed (_verAll_ ของ sheet ที่นับ) + today ใน key
+□ single-scan ต่อ sheet (DB_readLite.filter) ไม่มี N+1
+□ badge span data-nb + hidden default + .sb-badge[hidden]{display:none}
+□ label ห่อ flex:1 · badge margin-left:auto
+□ loadNavBadges เรียกใน startNotif + poll interval เดิม + afterSave (ไม่มี timer ใหม่)
+□ ซ่อนเมื่อ 0 · แสดง 99+ เมื่อเกิน
+□ Test: บันทึก → badge เด้ง +1 ทันที · advisor เห็นเฉพาะห้องตน
+```
+
+### เคสครอบคลุม (≥5)
+บันทึกมาสาย/ลากลับ/หักคะแนนวันนี้ (เคสนี้) · รายการรออนุมัติ (ใบลา/เบิก/PO) · ข้อความ/แจ้งเตือนยังไม่อ่าน · ตะกร้า/คำสั่งซื้อค้าง · ตั๋ว/ticket เปิดอยู่ · สต็อกต่ำ · งานที่มอบหมายวันนี้ · คิวที่รอ — ทุกเมนูที่แทน "จำนวนที่นับได้และเปลี่ยนบ่อย"
+
 
 
 ---

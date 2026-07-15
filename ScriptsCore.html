@@ -493,18 +493,18 @@
     var items = [
       { cat: 'ภาพรวม', links: [
         { h: '#/dashboard', i: 'speedometer2', t: 'แดชบอร์ด', cap: 'report.view_own|report.view_all', grad: 'g-blue' },
-        { h: '#/board', i: 'display', t: 'กระดานสด (วันนี้)', cap: 'late.view_own|late.view_all|leave.view_own|leave.view_all', grad: 'g-emerald' }
+        { h: '#/board', i: 'display', t: 'กระดานสด (วันนี้)', cap: 'late.view_own|late.view_all|leave.view_own|leave.view_all', grad: 'g-emerald', bdg: 'board' }
       ] },
       { cat: 'บันทึกงานปกครอง', links: [
-        { h: '#/scan/late', i: 'clock-history', t: 'บันทึกมาสาย', cap: 'late.create', grad: 'g-amber' },
-        { h: '#/scan/leave', i: 'house-heart', t: 'ขออนุญาตกลับบ้าน', cap: 'leave.create', grad: 'g-sky' },
-        { h: '#/scan/behavior', i: 'star', t: 'หักคะแนนความประพฤติ', cap: 'behavior.create', grad: 'g-rose' }
+        { h: '#/scan/late', i: 'clock-history', t: 'บันทึกมาสาย', cap: 'late.create', grad: 'g-amber', bdg: 'late' },
+        { h: '#/scan/leave', i: 'house-heart', t: 'ขออนุญาตกลับบ้าน', cap: 'leave.create', grad: 'g-sky', bdg: 'leave' },
+        { h: '#/scan/behavior', i: 'star', t: 'หักคะแนนความประพฤติ', cap: 'behavior.create', grad: 'g-rose', bdg: 'behavior' }
       ] },
       { cat: 'ข้อมูลและรายการ', links: [
         { h: '#/students', i: 'people-fill', t: 'ข้อมูลนักเรียน', cap: 'student.view_own|student.view_all', grad: 'g-indigo' },
-        { h: '#/records/late', i: 'list-check', t: 'รายการมาสาย', cap: 'late.view_own|late.view_all', grad: 'g-amber' },
-        { h: '#/records/leave', i: 'card-checklist', t: 'รายการลากลับ', cap: 'leave.view_own|leave.view_all', grad: 'g-sky' },
-        { h: '#/records/behavior', i: 'journal-text', t: 'รายการหักคะแนน', cap: 'behavior.view_own|behavior.view_all', grad: 'g-rose' }
+        { h: '#/records/late', i: 'list-check', t: 'รายการมาสาย', cap: 'late.view_own|late.view_all', grad: 'g-amber', bdg: 'late' },
+        { h: '#/records/leave', i: 'card-checklist', t: 'รายการลากลับ', cap: 'leave.view_own|leave.view_all', grad: 'g-sky', bdg: 'leave' },
+        { h: '#/records/behavior', i: 'journal-text', t: 'รายการหักคะแนน', cap: 'behavior.view_own|behavior.view_all', grad: 'g-rose', bdg: 'behavior' }
       ] },
       { cat: 'รายงาน', links: [
         { h: '#/report/room', i: 'building', t: 'รายงานรายห้อง', cap: 'report.view_own|report.view_all', grad: 'g-emerald' },
@@ -554,7 +554,8 @@
     var groups = navConfig();
     var sbNav = groups.map(function (g) {
       return '<div class="sb-cat">' + esc(g.cat) + '</div>' + g.links.map(function (l) {
-        return '<a class="sb-link" href="' + l.h + '" data-navlink="' + l.h + '"><i class="bi bi-' + l.i + '"></i> ' + esc(l.t) + '</a>';
+        var badge = l.bdg ? '<span class="sb-badge" data-nb="' + l.bdg + '" hidden>0</span>' : '';
+        return '<a class="sb-link" href="' + l.h + '" data-navlink="' + l.h + '"><i class="bi bi-' + l.i + '"></i> <span class="sb-tx">' + esc(l.t) + '</span>' + badge + '</a>';
       }).join('');
     }).join('');
     var launcher = groups.reduce(function (a, g) { return a.concat(g.links); }, []).map(function (l) {
@@ -627,6 +628,19 @@
     if (pi) pi.innerHTML = '<i class="bi bi-' + meta[0] + '"></i>'; if (nt) nt.textContent = meta[1]; if (ns) ns.textContent = meta[2];
   }
 
+  // ── badge จำนวนที่บันทึกวันนี้บนเมนู sidebar ──
+  function loadNavBadges() {
+    if (!Store.token || !el('sidebar')) return;
+    call('nav.counts', {}).then(function (c) {
+      if (!el('sidebar')) return;
+      $$('#sidebar .sb-badge[data-nb]').forEach(function (b) {
+        var n = Number(c[b.getAttribute('data-nb')] || 0);
+        if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.hidden = false; } else { b.hidden = true; }
+      });
+    }).catch(function () {});
+  }
+  A.refreshNavBadges = loadNavBadges;
+
   // ── popovers ──
   function togglePop(id) { var p = el(id); if (!p) return; var open = p.classList.contains('show'); closeAllPops(); if (!open) p.classList.add('show'); }
   function closeAllPops() { $$('.pop.show, .launcher-pop.show').forEach(function (p) { p.classList.remove('show'); }); }
@@ -645,7 +659,7 @@
   }
 
   // ── notifications ──
-  function startNotif() { stopNotif(); Store.notifFirst = true; loadNotif(true); Store.notifTimer = setInterval(function () { loadNotif(false); }, 40000); }
+  function startNotif() { stopNotif(); Store.notifFirst = true; loadNotif(true); loadNavBadges(); Store.notifTimer = setInterval(function () { loadNotif(false); loadNavBadges(); }, 40000); }
   function stopNotif() { if (Store.notifTimer) { clearInterval(Store.notifTimer); Store.notifTimer = null; } }
   function loadNotif(render) {
     if (!Store.token) return;

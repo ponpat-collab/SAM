@@ -174,6 +174,7 @@
   function afterSave(name, info) {
     SCAN.feed.unshift({ name: name, info: info, time: TH.time(new Date()) });
     renderFeed();
+    if (A.refreshNavBadges) A.refreshNavBadges();
     var pv = $('#scan-preview'); if (pv) pv.classList.remove('show');
     SCAN.student = null; SCAN.photo = '';
     var inp = $('#scan-input'); if (inp) { inp.value = ''; try { inp.focus(); } catch (e) {} }

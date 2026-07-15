@@ -68,6 +68,7 @@ setTimeout(function () {
     ok(!!doc.querySelector('.navbar'), 'navbar rendered');
     ok(!!doc.getElementById('page'), 'page container present');
     ok(doc.querySelectorAll('.sb-link').length > 5, 'nav links: ' + doc.querySelectorAll('.sb-link').length);
+    ok(doc.querySelectorAll('#sidebar .sb-badge[data-nb]').length >= 3, 'sidebar count badges present: ' + doc.querySelectorAll('#sidebar .sb-badge[data-nb]').length);
 
     // dashboard
     win.location.hash = '#/dashboard';
