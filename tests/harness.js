@@ -66,7 +66,8 @@ var src = files.map(function (f) { return fs.readFileSync(path.join(ROOT, f), 'u
 var indirectEval = eval;
 try { indirectEval(src); } catch (e) { console.error('LOAD FAIL:', e.message); process.exit(1); }
 var G = (function () { return this; })() || globalThis;
-['DB_initAllSchemas', 'Settings_ensureDefaults_', 'Seed_ensureUsers_', 'Seed_ensureOffenses_', 'DB_rowCount', 'SHEETS', 'Auth_login', '_dispatch_', 'DB_get'].forEach(function (n) { if (typeof G[n] !== 'undefined') global[n] = G[n]; });
+['DB_initAllSchemas', 'Settings_ensureDefaults_', 'Seed_ensureUsers_', 'Seed_ensureOffenses_', 'DB_rowCount', 'SHEETS', 'Auth_login', '_dispatch_', 'DB_get',
+ 'SCHEMAS', 'DB_ensureSchema_', '_bumpVer_', 'Behavior_repairShift_'].forEach(function (n) { if (typeof G[n] !== 'undefined') global[n] = G[n]; });
 
 // ── run scenario ──
 var pass = 0, fail = 0;
@@ -261,6 +262,30 @@ ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === st
 var sc40001 = Number(api('student.lookup', adminTok, { id: '40001' }).student.score);
 api('student.save', adminTok, { id: '40001', prefix: 'เด็กชาย', first_name: 'สมชาย', last_name: 'ใจดี', class_level: '3', room: '1', number: '1', advisor_name: 'ครูเอ', score: 5 });
 ok(Number(api('student.lookup', adminTok, { id: '40001' }).student.score) === sc40001, 'student.save ไม่ให้ payload แก้คะแนน (กัน privilege escalation)');
+
+// ── NEW: ซ่อมแถวที่คอลัมน์เลื่อน (v1.0.6 แทรก ref_id กลาง schema → ผู้บันทึกกลายเป็น yes/no) ──
+(function () {
+  var cols = SCHEMAS[SHEETS.BEHAVIOR];
+  var sh = DB_ensureSchema_(SHEETS.BEHAVIOR), last = sh.getLastRow();
+  var iPhoto = cols.indexOf('photo_url'), iRef = cols.indexOf('ref_id');
+  ok(iRef === cols.length - 1, 'ref_id อยู่ท้ายตาราง (ห้ามแทรกกลาง)');
+  // จำลองแถวที่เขียนด้วย layout เก่า: ค่าถูกดันขวา 1 ช่องตั้งแต่ photo_url+1
+  var row = sh.getRange(2, 1, 1, cols.length).getValues()[0];
+  var bad = row.slice();
+  for (var i = cols.length - 1; i > iPhoto + 1; i--) bad[i] = bad[i - 1];
+  bad[iPhoto + 1] = '';                       // ref_id ที่อยู่ผิดที่ (ว่าง)
+  sh.getRange(2, 1, 1, cols.length).setValues([bad]);
+  _bumpVer_('sheet:' + SHEETS.BEHAVIOR);
+  var broken = DB_get(SHEETS.BEHAVIOR, row[0]);
+  ok(String(broken.created_by_name) !== String(row[cols.indexOf('created_by_name')]), 'จำลองสำเร็จ: ผู้บันทึกเพี้ยนเป็น "' + broken.created_by_name + '"');
+  ok(!/^(yes|no)$/i.test(String(broken.canceled)), 'สัญญาณจับได้: canceled ไม่ใช่ yes/no ("' + broken.canceled + '")');
+  var rs = Behavior_repairShift_();
+  ok(rs.fixed === 1, 'repairShift ซ่อม 1 แถว');
+  var fixedRow = DB_get(SHEETS.BEHAVIOR, row[0]);
+  ok(String(fixedRow.created_by_name) === String(row[cols.indexOf('created_by_name')]), 'ผู้บันทึกกลับเป็นชื่อจริง: ' + fixedRow.created_by_name);
+  ok(String(fixedRow.canceled).toLowerCase() === 'no' || String(fixedRow.canceled).toLowerCase() === 'yes', 'canceled กลับเป็น yes/no');
+  ok(Behavior_repairShift_().fixed === 0, 'repairShift รันซ้ำ = no-op (idempotent)');
+})();
 
 // ── NEW: คำนวณคะแนนใหม่ทั้งระบบ (ซ่อมคะแนนที่เพี้ยน) ──
 api('student.save', adminTok, { is_new: true, id: '40013', prefix: 'เด็กหญิง', first_name: 'คะแนน', last_name: 'เพี้ยน', class_level: '3', room: '1', number: '13', advisor_name: 'ครูเอ' });

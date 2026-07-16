@@ -195,9 +195,32 @@ function Behavior_cancelByRef_(sid, refId, map) {
   return { canceled: autos.length, score_after: score };
 }
 
+// ── ซ่อมแถวที่เขียนช่วง v1.0.6–1.0.7 (ตอนนั้น ref_id ถูกแทรก "กลาง" schema → คอลัมน์เลื่อน) ──
+// แถวผิด layout: [... photo_url, ref_id, created_by, created_by_name, canceled, created_at, rev]
+// layout ถูก:    [... photo_url, created_by, created_by_name, canceled, created_at, rev, ref_id]
+// จับได้จาก canceled ที่ไม่ใช่ yes/no (เพราะโดนค่าอื่นเลื่อนมาทับ)
+function Behavior_repairShift_() {
+  var name = SHEETS.BEHAVIOR, cols = SCHEMAS[name], sh = DB_ensureSchema_(name);
+  var last = sh.getLastRow(); if (last < 2) return { fixed: 0, total: 0 };
+  var iPhoto = cols.indexOf('photo_url'), iCanceled = cols.indexOf('canceled'), iRef = cols.indexOf('ref_id');
+  if (iPhoto < 0 || iCanceled < 0 || iRef < 0) return { fixed: 0, total: 0 };
+  var rng = sh.getRange(2, 1, last - 1, cols.length), vals = rng.getValues(), fixed = 0;
+  vals.forEach(function (row) {
+    var c = String(row[iCanceled] == null ? '' : row[iCanceled]).trim().toLowerCase();
+    if (c === 'yes' || c === 'no' || c === '') return;            // แถวปกติ
+    var refv = row[iPhoto + 1];                                    // ค่า ref_id ที่อยู่ผิดที่
+    for (var i = iPhoto + 1; i < iRef; i++) row[i] = row[i + 1];   // เลื่อนกลับ
+    row[iRef] = refv == null ? '' : refv;
+    fixed++;
+  });
+  if (fixed) { rng.setValues(vals); _flush_(); _bumpVer_('sheet:' + name); }
+  return { fixed: fixed, total: vals.length };
+}
+
 // คำนวณคะแนนใหม่ทั้งระบบจากรายการจริง (ซ่อมข้อมูลที่เคยเพี้ยนจากการบวก/ลบสะสม) — single scan + batch
 function Behavior_recomputeAll(user, p) {
   Auth_requireCap(user, 'student.manage');
+  var shift = Behavior_repairShift_();          // ซ่อมคอลัมน์ที่เลื่อนก่อน (ถ้ามี) แล้วค่อยคำนวณคะแนน
   var map = Settings_map_(), start = cfg_num_(map.start_score) || 100, sums = {};
   DB_readLite(SHEETS.BEHAVIOR).forEach(function (r) {
     if (_yes_(r.canceled)) return;
@@ -212,8 +235,8 @@ function Behavior_recomputeAll(user, p) {
       if (cfg_num_(s.score) !== want) { DB_update(SHEETS.STUDENTS, s.id, { score: want }); fixed++; }
     });
   } finally { DB_endBatch(); }
-  Audit_log_(user, 'score.recompute', 'student', '', { fixed: fixed, total: stus.length });
-  return { ok: true, fixed: fixed, total: stus.length };
+  Audit_log_(user, 'score.recompute', 'student', '', { fixed: fixed, total: stus.length, shift_fixed: shift.fixed });
+  return { ok: true, fixed: fixed, total: stus.length, shift_fixed: shift.fixed };
 }
 
 function Behavior_list(user, p) {

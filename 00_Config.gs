@@ -53,9 +53,11 @@ var SCHEMAS = Object.freeze({
                 'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
   LeaveRecords: ['id', 'date', 'time', 'student_id', 'reason', 'guardian_name', 'guardian_phone',
                  'relation', 'photo_url', 'note', 'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
+  // ★ เพิ่มคอลัมน์ใหม่ "ท้ายตารางเท่านั้น" — DB_ensureSchema_ เขียน header ทับโดยไม่ย้ายข้อมูล
+  //   แทรกกลาง = ข้อมูลเดิมทุกแถวเลื่อนคอลัมน์ (ref_id เคยแทรกหลัง photo_url ใน v1.0.6 → ต้อง repair)
   BehaviorRecords: ['id', 'date', 'time', 'student_id', 'kind', 'offense_code', 'offense_name',
-                    'category', 'detail', 'points', 'score_after', 'photo_url', 'ref_id',
-                    'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
+                    'category', 'detail', 'points', 'score_after', 'photo_url',
+                    'created_by', 'created_by_name', 'canceled', 'created_at', 'rev', 'ref_id'],
   OffenseTypes: ['code', 'name', 'category', 'points', 'icon', 'color', 'is_active', 'sort_order', 'created_at', 'updated_at'],
   Settings: ['key', 'value', 'updated_at'],
   AuditLog: ['id', 'at', 'user_id', 'user_name', 'action', 'entity', 'entity_id', 'detail'],

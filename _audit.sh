@@ -400,6 +400,13 @@ if(bad.length){ console.log("  ✗ เรียกแต่ไม่มีนิ
 console.log("  ✓ ทุก TH.*/fmt.* ที่เรียกมีนิยามครบ");
 ' || FAIL=1
 
+# ── 35) schema ห้ามแทรก/สลับคอลัมน์กลางตาราง (append ท้ายเท่านั้น) ──
+echo "─35) schema evolution (คอลัมน์ใหม่ต้อง append ท้าย · ห้ามแทรก/สลับกลาง)"
+if git rev-parse --verify HEAD >/dev/null 2>&1 && git cat-file -e HEAD:00_Config.gs 2>/dev/null; then
+  git show HEAD:00_Config.gs > /tmp/_sch_old.gs 2>/dev/null
+  node tests/schema_guard.js /tmp/_sch_old.gs 00_Config.gs || FAIL=1
+else echo "  ⚠ ไม่มี git baseline — ข้ามด่านนี้"; fi
+
 echo "════════════════════════════════════════"
 if [ $FAIL -eq 0 ]; then
   echo "✅ AUDIT ผ่านครบทุกด่าน — พร้อม deploy"
