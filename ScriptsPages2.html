@@ -174,7 +174,15 @@
     $('#rc-to').addEventListener('change', function () { st.to = this.value; st.page = 1; load(); });
     if (cfg.kind) $('#rc-kind').addEventListener('change', function () { st.kind = this.value; st.page = 1; load(); });
     $('#rc-clear').addEventListener('click', function () { st.q = ''; st.from = ''; st.to = ''; st.kind = ''; st.page = 1; recordListPage(cfg); });
-    $('#rc-print').addEventListener('click', function () { window.print(); });
+    $('#rc-print').addEventListener('click', function (ev) {
+      A.runBtn(ev.currentTarget, function () {
+        // ดึง "ทุกรายการตามตัวกรอง" ไม่ใช่แค่หน้าที่เปิดอยู่
+        return cfg.fetch({ q: st.q, from: st.from, to: st.to, kind: st.kind, page: 1, per_page: 1000 }).then(function (d) {
+          if (!d.items.length) { toast('ไม่มีข้อมูลให้พิมพ์', 'warning'); return; }
+          A.printDoc({ title: cfg.title, sub: rangeText(st) + ' · ' + d.total + ' รายการ', html: cfg.prTable(d.items) });
+        });
+      }, { loading: 'กำลังเตรียมเอกสาร…' }).catch(function () {});
+    });
     function load() {
       var host = $('#rc-list'); if (!host) return; host.innerHTML = '<div class="skel" style="height:200px"></div>';
       var payload = { q: st.q, from: st.from, to: st.to, kind: st.kind, page: st.page, per_page: 40 };
@@ -187,6 +195,12 @@
       }).catch(function (e) { host.innerHTML = emptyBox('wifi-off', 'โหลดไม่สำเร็จ', e.message); });
     }
     load();
+  }
+  function rangeText(st) {
+    if (st.from && st.to) return 'ช่วง ' + TH.date(st.from) + ' – ' + TH.date(st.to);
+    if (st.from) return 'ตั้งแต่ ' + TH.date(st.from);
+    if (st.to) return 'ถึง ' + TH.date(st.to);
+    return 'ทุกช่วงเวลา';
   }
   function cancelBtn(id, doCancel, reload, name) {
     return function () { A.confirm({ title: 'ยกเลิกรายการ?', message: 'ยกเลิกรายการของ ' + name + ' (จะไม่นับในสถิติ)', okText: 'ยกเลิกรายการ', danger: true }).then(function (ok) { if (!ok) return; doCancel(id).then(function () { toast('ยกเลิกรายการแล้ว', 'success'); reload(); }).catch(function (e) { toast(e.message, 'error'); }); }); };
@@ -202,7 +216,15 @@
     recordListPage({ key: 'late', fetch: fetchLate, icon: 'clock-history', pill: 'รายการมาสาย', title: 'รายการมาสาย', sub: 'ประวัติการมาสายทั้งหมด · กรองตามวันและห้อง',
       table: function (items) { return '<div class="tbl-wrap"><table class="data-table rc"><thead><tr><th>วันที่</th><th>เวลา</th><th>นักเรียน</th><th>ชั้น/ห้อง</th><th>สาเหตุ</th><th>ผู้บันทึก</th><th></th></tr></thead><tbody>' +
         items.map(function (r) { return '<tr' + (r.canceled ? ' class="is-canceled"' : '') + '><td data-label="วันที่">' + TH.date(r.date) + '</td><td data-label="เวลา">' + esc(r.time) + '</td><td data-label="นักเรียน"><div class="stu-cell"><div class="avatar sm">' + esc(fmt.initials(r.name)) + '</div><div><div class="nm">' + esc(r.name) + '</div><div class="sub">' + esc(r.student_id) + '</div></div></div></td><td data-label="ชั้น/ห้อง">' + esc(r.class_room) + '</td><td data-label="สาเหตุ">' + esc(r.reason) + '</td><td data-label="ผู้บันทึก">' + esc(r.created_by_name) + '</td><td class="t-center">' + (r.canceled ? '<span class="badge b-muted">ยกเลิก</span>' : (hasCap('late.create') ? '<button class="btn btn-sm btn-ghost" data-cancel="' + esc(r.id) + '" data-nm="' + esc(r.name) + '"><i class="bi bi-x-lg"></i></button>' : '')) + '</td></tr>'; }).join('') + '</tbody></table></div>'; },
-      wireRows: function (host, reload) { $$('[data-cancel]', host).forEach(function (b) { b.addEventListener('click', cancelBtn(b.getAttribute('data-cancel'), cancelLate, reload, b.getAttribute('data-nm'))); }); }
+      wireRows: function (host, reload) { $$('[data-cancel]', host).forEach(function (b) { b.addEventListener('click', cancelBtn(b.getAttribute('data-cancel'), cancelLate, reload, b.getAttribute('data-nm'))); }); },
+      prTable: function (items) {
+        return A.prTable([
+          { label: 'วันที่', fmt: function (r) { return TH.date(r.date); } }, { label: 'เวลา', k: 'time' },
+          { label: 'รหัส', k: 'student_id' }, { label: 'ชื่อ-สกุล', k: 'name' }, { label: 'ชั้น/ห้อง', k: 'class_room' },
+          { label: 'ครูที่ปรึกษา', fmt: function (r) { return r.advisor || '-'; } }, { label: 'สาเหตุ', k: 'reason' },
+          { label: 'ผู้บันทึก', k: 'created_by_name' }, { label: 'สถานะ', fmt: function (r) { return r.canceled ? 'ยกเลิก' : ''; } }
+        ], items);
+      }
     });
   });
 
@@ -213,6 +235,15 @@
       wireRows: function (host, reload) {
         $$('[data-cancel]', host).forEach(function (b) { b.addEventListener('click', cancelBtn(b.getAttribute('data-cancel'), cancelLeave, reload, b.getAttribute('data-nm'))); });
         $$('[data-photo]', host).forEach(function (b) { b.addEventListener('click', function () { Modal.open({ title: 'รูปหลักฐานผู้มารับ', icon: 'image', html: '<div style="text-align:center"><img src="' + esc(b.getAttribute('data-photo')) + '" referrerpolicy="no-referrer" class="lh" style="max-width:100%;border-radius:12px"></div>', onOpen: function (c) { A.wireImg(c); } }); }); });
+      },
+      prTable: function (items) {
+        return A.prTable([
+          { label: 'วันที่', fmt: function (r) { return TH.date(r.date); } }, { label: 'เวลา', k: 'time' },
+          { label: 'รหัส', k: 'student_id' }, { label: 'ชื่อ-สกุล', k: 'name' }, { label: 'ชั้น/ห้อง', k: 'class_room' },
+          { label: 'เหตุผล', k: 'reason' }, { label: 'ผู้มารับ', k: 'guardian_name' },
+          { label: 'ความเกี่ยวข้อง', k: 'relation' }, { label: 'เบอร์โทร', fmt: function (r) { return r.guardian_phone || '-'; } },
+          { label: 'สถานะ', fmt: function (r) { return r.canceled ? 'ยกเลิก' : ''; } }
+        ], items);
       }
     });
   });
@@ -220,8 +251,19 @@
   A.route('#/records/behavior', function () {
     recordListPage({ key: 'behavior', fetch: fetchBehavior, icon: 'journal-text', pill: 'รายการหักคะแนน', title: 'รายการหัก/เพิ่มคะแนน', sub: 'ประวัติพฤติกรรมทั้งหมด · หัก/เพิ่ม/ยกเลิก', kind: true,
       table: function (items) { return '<div class="tbl-wrap"><table class="data-table rc"><thead><tr><th>วันที่</th><th>นักเรียน</th><th>รายการ</th><th class="t-num">คะแนน</th><th class="t-num">คงเหลือ</th><th>ผู้บันทึก</th><th></th></tr></thead><tbody>' +
-        items.map(function (r) { var neg = r.points < 0; return '<tr' + (r.canceled ? ' class="is-canceled"' : '') + '><td data-label="วันที่">' + TH.date(r.date) + ' ' + esc(r.time) + '</td><td data-label="นักเรียน"><div class="stu-cell"><div class="avatar sm">' + esc(fmt.initials(r.name)) + '</div><div><div class="nm">' + esc(r.name) + '</div><div class="sub">' + esc(r.class_room) + '</div></div></div></td><td data-label="รายการ"><span class="badge ' + (neg ? 'b-danger' : 'b-ok') + '">' + esc(r.category) + '</span> ' + esc(r.offense_name) + '</td><td data-label="คะแนน" class="t-num"><b class="' + (neg ? 'pts-neg' : 'pts-pos') + '">' + (neg ? '' : '+') + r.points + '</b></td><td data-label="คงเหลือ" class="t-num">' + r.score_after + '</td><td data-label="ผู้บันทึก">' + esc(r.created_by_name) + '</td><td class="t-center">' + (r.canceled ? '<span class="badge b-muted">ยกเลิก</span>' : (hasCap('behavior.create') ? '<button class="btn btn-sm btn-ghost" data-cancel="' + esc(r.id) + '" data-nm="' + esc(r.name) + '"><i class="bi bi-arrow-counterclockwise"></i></button>' : '')) + '</td></tr>'; }).join('') + '</tbody></table></div>'; },
-      wireRows: function (host, reload) { $$('[data-cancel]', host).forEach(function (b) { b.addEventListener('click', cancelBtn(b.getAttribute('data-cancel'), cancelBehavior, reload, b.getAttribute('data-nm'))); }); }
+        items.map(function (r) { var neg = r.points < 0; return '<tr' + (r.canceled ? ' class="is-canceled"' : '') + '><td data-label="วันที่">' + TH.date(r.date) + ' ' + esc(r.time) + '</td><td data-label="นักเรียน"><div class="stu-cell"><div class="avatar sm">' + esc(fmt.initials(r.name)) + '</div><div><div class="nm">' + esc(r.name) + '</div><div class="sub">' + esc(r.class_room) + '</div></div></div></td><td data-label="รายการ"><span class="badge ' + (neg ? 'b-danger' : 'b-ok') + '">' + esc(r.category) + '</span> ' + esc(r.offense_name) + (r.auto ? ' <span class="badge b-auto"><i class="bi bi-robot"></i> อัตโนมัติ</span>' : '') + '</td><td data-label="คะแนน" class="t-num"><b class="' + (neg ? 'pts-neg' : 'pts-pos') + '">' + (neg ? '' : '+') + r.points + '</b></td><td data-label="คงเหลือ" class="t-num">' + r.score_after + '</td><td data-label="ผู้บันทึก">' + esc(r.created_by_name) + '</td><td class="t-center">' + (r.canceled ? '<span class="badge b-muted">ยกเลิก</span>' : (hasCap('behavior.create') ? '<button class="btn btn-sm btn-ghost" data-cancel="' + esc(r.id) + '" data-nm="' + esc(r.name) + '"><i class="bi bi-arrow-counterclockwise"></i></button>' : '')) + '</td></tr>'; }).join('') + '</tbody></table></div>'; },
+      wireRows: function (host, reload) { $$('[data-cancel]', host).forEach(function (b) { b.addEventListener('click', cancelBtn(b.getAttribute('data-cancel'), cancelBehavior, reload, b.getAttribute('data-nm'))); }); },
+      prTable: function (items) {
+        return A.prTable([
+          { label: 'วันที่', fmt: function (r) { return TH.date(r.date) + ' ' + r.time; } },
+          { label: 'รหัส', k: 'student_id' }, { label: 'ชื่อ-สกุล', k: 'name' }, { label: 'ชั้น/ห้อง', k: 'class_room' },
+          { label: 'หมวด', k: 'category' },
+          { label: 'รายการ', fmt: function (r) { return r.offense_name + (r.auto ? ' (อัตโนมัติ)' : ''); } },
+          { label: 'คะแนน', align: 'right', fmt: function (r) { return (r.points > 0 ? '+' : '') + r.points; } },
+          { label: 'คงเหลือ', align: 'right', k: 'score_after' }, { label: 'ผู้บันทึก', k: 'created_by_name' },
+          { label: 'สถานะ', fmt: function (r) { return r.canceled ? 'ยกเลิก' : ''; } }
+        ], items);
+      }
     });
   });
 
@@ -235,7 +277,25 @@
         '<button class="btn btn-ghost btn-sm" id="rr-print" style="margin-left:auto"><i class="bi bi-printer"></i> พิมพ์</button></div>' +
         '<div id="rr-body">' + '<div class="skel" style="height:200px"></div>' + '</div></div>';
     $('#rr-go').addEventListener('click', function () { st.from = $('#rr-from').value; st.to = $('#rr-to').value; load(); });
-    $('#rr-print').addEventListener('click', function () { window.print(); });
+    $('#rr-print').addEventListener('click', function (ev) {
+      A.runBtn(ev.currentTarget, function () {
+        return call('report.room', { from: st.from, to: st.to }).then(function (d) {
+          if (!d.rooms.length) { toast('ไม่มีข้อมูลให้พิมพ์', 'warning'); return; }
+          var t = d.totals;
+          A.printDoc({
+            title: 'รายงานสรุปรายห้องเรียน', sub: rangeText(st),
+            summary: '<b>รวมทั้งหมด:</b> นักเรียน ' + t.students + ' คน · มาสาย ' + t.late + ' ครั้ง · ลากลับ ' + t.leave + ' ครั้ง · หักคะแนน ' + t.deduct + ' ครั้ง (รวม ' + t.points + ' คะแนน)',
+            html: A.prTable([
+              { label: 'ห้อง', fmt: function (r) { return 'ม.' + r.class_level + '/' + r.room; } },
+              { label: 'ครูที่ปรึกษา', fmt: function (r) { return r.advisor || '-'; } },
+              { label: 'นักเรียน', align: 'right', k: 'students' }, { label: 'มาสาย', align: 'right', k: 'late' },
+              { label: 'ลากลับ', align: 'right', k: 'leave' }, { label: 'ครั้งหักคะแนน', align: 'right', k: 'deduct' },
+              { label: 'คะแนนที่ถูกหัก', align: 'right', k: 'points' }
+            ], d.rooms)
+          });
+        });
+      }, { loading: 'กำลังเตรียมเอกสาร…' }).catch(function () {});
+    });
     function load() {
       var host = $('#rr-body'); host.innerHTML = '<div class="skel" style="height:200px"></div>';
       call('report.room', { from: st.from, to: st.to }).then(function (d) {
@@ -264,7 +324,28 @@
         '<div id="pr-body">' + '<div class="skel" style="height:260px"></div>' + '</div></div>';
     $$('[data-range]').forEach(function (b) { b.addEventListener('click', function () { $$('[data-range]').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); var n = Number(b.getAttribute('data-range')); var to = A.today(); var from = new Date(Date.now() - (n - 1) * 86400000); st.to = to; st.from = from.getFullYear() + '-' + ('0' + (from.getMonth() + 1)).slice(-2) + '-' + ('0' + from.getDate()).slice(-2); $('#pr-from').value = st.from; $('#pr-to').value = st.to; load(); }); });
     $('#pr-go').addEventListener('click', function () { st.from = $('#pr-from').value; st.to = $('#pr-to').value; load(); });
-    $('#pr-print').addEventListener('click', function () { window.print(); });
+    $('#pr-print').addEventListener('click', function (ev) {
+      A.runBtn(ev.currentTarget, function () {
+        return call('report.period', { from: st.from, to: st.to }).then(function (d) {
+          var k = d.kpi;
+          A.printDoc({
+            title: 'รายงานสรุปตามช่วงเวลา', sub: 'ช่วง ' + TH.date(d.from) + ' – ' + TH.date(d.to),
+            summary: '<b>ภาพรวม:</b> มาสาย ' + k.late + ' ครั้ง · ลากลับ ' + k.leave + ' ครั้ง · หักคะแนน ' + k.deduct + ' ครั้ง (รวม ' + k.points + ' คะแนน)',
+            html: '<h3 style="font-family:Kanit;font-size:13pt;margin:10px 0 6px">นักเรียนที่มีสถิติสูงสุด</h3>' +
+              A.prTable([
+                { label: 'อันดับ', align: 'right', fmt: function (r) { return String(d.top_students.indexOf(r) + 1); } },
+                { label: 'รหัส', k: 'id' }, { label: 'ชื่อ-สกุล', k: 'name' }, { label: 'ห้อง', k: 'class_room' },
+                { label: 'มาสาย', align: 'right', k: 'late' }, { label: 'ลากลับ', align: 'right', k: 'leave' },
+                { label: 'หักคะแนน', align: 'right', k: 'deduct' }
+              ], d.top_students) +
+              '<h3 style="font-family:Kanit;font-size:13pt;margin:12px 0 6px">สาเหตุการมาสายยอดนิยม</h3>' +
+              A.prTable([{ label: 'สาเหตุ', k: 'label' }, { label: 'จำนวน', align: 'right', k: 'value' }], d.late_reasons) +
+              '<h3 style="font-family:Kanit;font-size:13pt;margin:12px 0 6px">ฐานความผิดที่พบบ่อย</h3>' +
+              A.prTable([{ label: 'ฐานความผิด', k: 'label' }, { label: 'จำนวน', align: 'right', k: 'value' }], d.offenses)
+          });
+        });
+      }, { loading: 'กำลังเตรียมเอกสาร…' }).catch(function () {});
+    });
     function load() {
       var host = $('#pr-body'); host.innerHTML = '<div class="skel" style="height:260px"></div>';
       call('report.period', { from: st.from, to: st.to }).then(function (d) {
@@ -315,20 +396,21 @@
   });
 
   function printStudentReport(d) {
-    var s = d.student, old = $('.pr-only'); if (old) old.remove();
-    var doc = document.createElement('div'); doc.className = 'pr-only';
-    doc.innerHTML = '<div class="pr-doc"><div class="pr-title"><h2>รายงานพฤติกรรมนักเรียนรายบุคคล</h2><div class="sub">' + esc(d.org || '') + ' · ปีการศึกษา ' + esc(d.academic_year || '') + '</div></div>' +
-      '<table class="pr-table"><tr><th style="width:130px">รหัสนักเรียน</th><td>' + esc(s.id) + '</td><th style="width:110px">คะแนนคงเหลือ</th><td><b>' + s.score + ' / ' + d.start_score + '</b></td></tr>' +
-      '<tr><th>ชื่อ-สกุล</th><td>' + esc(s.name) + '</td><th>ชั้น/ห้อง/เลขที่</th><td>ม.' + esc(s.class_level) + '/' + esc(s.room) + ' เลขที่ ' + esc(s.number) + '</td></tr>' +
-      '<tr><th>ครูที่ปรึกษา</th><td colspan="3">' + esc(s.advisor_name || '-') + '</td></tr></table>' +
-      '<p><b>สรุป:</b> มาสาย ' + d.summary.late + ' ครั้ง · ลากลับ ' + d.summary.leave + ' ครั้ง · หักคะแนน ' + d.summary.deduct + ' ครั้ง (รวม ' + d.summary.points_lost + ' คะแนน)</p>' +
-      '<h3 style="font-family:Kanit;font-size:14pt;margin:12px 0 6px">ประวัติการหัก/เพิ่มคะแนน</h3>' +
-      '<table class="pr-table"><tr><th>วันที่</th><th>รายการ</th><th>คะแนน</th><th>คงเหลือ</th><th>ผู้บันทึก</th></tr>' +
-      (d.behavior.length ? d.behavior.map(function (r) { return '<tr><td>' + TH.date(r.date) + '</td><td>' + esc(r.offense_name) + '</td><td>' + (r.points > 0 ? '+' : '') + r.points + '</td><td>' + r.score_after + '</td><td>' + esc(r.by) + '</td></tr>'; }).join('') : '<tr><td colspan="5" style="text-align:center">ไม่มีประวัติ</td></tr>') + '</table>' +
-      '<div class="pr-sign"><div class="s"><div class="line"></div>ครูที่ปรึกษา</div><div class="s"><div class="line"></div>หัวหน้าฝ่ายปกครอง</div><div class="s"><div class="line"></div>ผู้อำนวยการ</div></div></div>';
-    document.body.appendChild(doc);
-    window.print();
-    setTimeout(function () { doc.remove(); }, 500);
+    var s = d.student;
+    A.printDoc({
+      title: 'รายงานพฤติกรรมนักเรียนรายบุคคล', sub: 'ม.' + s.class_level + '/' + s.room + ' · ' + s.name,
+      summary: '<table class="pr-table"><tr><th style="width:130px">รหัสนักเรียน</th><td>' + esc(s.id) + '</td><th style="width:110px">คะแนนคงเหลือ</th><td><b>' + s.score + ' / ' + d.start_score + '</b></td></tr>' +
+        '<tr><th>ชื่อ-สกุล</th><td>' + esc(s.name) + '</td><th>ชั้น/ห้อง/เลขที่</th><td>ม.' + esc(s.class_level) + '/' + esc(s.room) + ' เลขที่ ' + esc(s.number) + '</td></tr>' +
+        '<tr><th>ครูที่ปรึกษา</th><td colspan="3">' + esc(s.advisor_name || '-') + '</td></tr></table>' +
+        '<b>สรุป:</b> มาสาย ' + d.summary.late + ' ครั้ง · ลากลับ ' + d.summary.leave + ' ครั้ง · หักคะแนน ' + d.summary.deduct + ' ครั้ง (รวม ' + d.summary.points_lost + ' คะแนน)',
+      html: '<h3 style="font-family:Kanit;font-size:13pt;margin:12px 0 6px">ประวัติการหัก/เพิ่มคะแนน</h3>' +
+        A.prTable([
+          { label: 'วันที่', fmt: function (r) { return TH.date(r.date); } },
+          { label: 'รายการ', k: 'offense_name' },
+          { label: 'คะแนน', align: 'right', fmt: function (r) { return (r.points > 0 ? '+' : '') + r.points; } },
+          { label: 'คงเหลือ', align: 'right', k: 'score_after' }, { label: 'ผู้บันทึก', k: 'by' }
+        ], d.behavior)
+    });
   }
 
   // ═══ ADMIN: OFFENSES ═══
@@ -453,7 +535,9 @@
           '<div class="field" style="margin-top:6px"><label class="switch"><input type="checkbox" data-setck="late_auto_deduct"' + (s.late_auto_deduct === 'yes' ? ' checked' : '') + '><span class="track"></span> หักคะแนนอัตโนมัติเมื่อมาสายครบเกณฑ์/สัปดาห์</label></div>' +
           '<div class="grid-2" style="gap:14px"><div class="field"><label>จำนวนครั้ง/สัปดาห์</label><input class="input" type="number" data-set="late_auto_threshold" value="' + esc(s.late_auto_threshold) + '"></div>' +
           '<div class="field"><label>คะแนนที่หัก</label><input class="input" type="number" data-set="late_auto_points" value="' + esc(s.late_auto_points) + '"></div></div>' +
-          '<button type="button" class="btn btn-soft btn-sm" id="set-reset-score"><i class="bi bi-arrow-repeat"></i> รีเซ็ตคะแนนทุกคน (ขึ้นปีการศึกษาใหม่)</button></div>' +
+          '<div class="field-hint" style="margin-bottom:8px"><i class="bi bi-info-circle"></i> การหักอัตโนมัติจะสร้าง “รายการหักคะแนน” จริง — ดูและยกเลิกได้ในหน้ารายการหักคะแนน และถ้ายกเลิกรายการมาสายที่ทำให้ครบเกณฑ์ ระบบจะคืนคะแนนให้เอง</div>' +
+          '<div class="toolbar" style="gap:8px"><button type="button" class="btn btn-soft btn-sm" id="set-recompute"><i class="bi bi-calculator"></i> คำนวณคะแนนใหม่จากรายการ</button>' +
+          '<button type="button" class="btn btn-soft btn-sm" id="set-reset-score"><i class="bi bi-arrow-repeat"></i> รีเซ็ตคะแนนทุกคน (ขึ้นปีการศึกษาใหม่)</button></div></div>' +
         '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-bell"></i></div><div class="pt">การแจ้งเตือน & บริการนักเรียน</div></div>' +
           '<div class="field"><label class="switch"><input type="checkbox" data-setck="self_service"' + (String(s.self_service || 'yes') !== 'no' ? ' checked' : '') + '><span class="track"></span> เปิดให้นักเรียนบันทึกมาสาย/ลากลับเองจากหน้าล็อกอิน</label></div>' +
           '<div class="grid-2" style="gap:14px"><div class="field"><label>แจ้งเตือนเมื่อมาสายสะสมครบ (ครั้ง)</label><input class="input" type="number" data-set="late_alert_count" value="' + esc(s.late_alert_count || '3') + '"></div>' +
@@ -482,6 +566,16 @@
         A.runBtn(ev.currentTarget, function () { return call('setting.update', { settings: patch }).then(function (r) { toast('บันทึกการตั้งค่าแล้ว', 'success'); Store.boot.settings = r.settings; A.applyTheme(); }); }).catch(function () {});
       });
       $('#set-repair').addEventListener('click', function () { call('setting.repair', {}).then(function (r) { toast('ซ่อมค่าแล้ว ' + r.fixed + ' แถว', 'success'); }).catch(function (e) { toast(e.message, 'error'); }); });
+      $('#set-recompute').addEventListener('click', function (ev) {
+        A.confirm({ title: 'คำนวณคะแนนใหม่?', message: 'คำนวณคะแนนนักเรียนทุกคนใหม่จากรายการหัก/เพิ่มคะแนนที่ยังไม่ยกเลิก — ใช้ซ่อมคะแนนที่ไม่ตรง (เช่น ยกเลิกรายการแล้วคะแนนไม่กลับ)', okText: 'คำนวณใหม่' }).then(function (ok) {
+          if (!ok) return;
+          A.runBtn(ev.currentTarget, function () {
+            return call('behavior.recompute', {}).then(function (r) {
+              Swal.fire({ icon: 'success', title: 'คำนวณคะแนนใหม่แล้ว', html: 'ปรับคะแนน <b>' + r.fixed + '</b> คน จากทั้งหมด ' + r.total + ' คน', confirmButtonColor: '#2563eb' });
+            });
+          }, { loading: 'กำลังคำนวณ…' }).catch(function () {});
+        });
+      });
       $('#set-reset-score').addEventListener('click', function () { A.confirm({ title: 'รีเซ็ตคะแนนทุกคน?', message: 'ตั้งคะแนนนักเรียนทุกคนกลับเป็นคะแนนตั้งต้น (ประวัติเก่ายังเก็บไว้)', okText: 'รีเซ็ตคะแนน', danger: true }).then(function (ok) { if (!ok) return; call('student.reset_scores', {}).then(function (r) { toast('รีเซ็ตคะแนน ' + r.count + ' คนแล้ว', 'success'); }).catch(function (e) { toast(e.message, 'error'); }); }); });
       $('#tg-me').addEventListener('click', function () { Spinner.show('กำลังตรวจ Bot…'); call('tg.get_me', {}).then(function (r) { Spinner.hide(); Swal.fire({ icon: 'success', title: 'Bot: ' + esc(r.name), html: '@' + esc(r.username) + '<br><a href="' + esc(r.link) + '" target="_blank">เปิดแชตบอท</a>', confirmButtonColor: '#2563eb' }); }).catch(function (e) { Spinner.hide(); toast(e.message, 'error'); }); });
       $('#tg-ids').addEventListener('click', function () { Spinner.show('กำลังดึง Chat ID…'); call('tg.get_updates', {}).then(function (r) { Spinner.hide(); Modal.open({ title: 'Chat ID ที่ทักบอท', icon: 'people', html: r.chats.length ? '<div class="tbl-wrap"><table class="data-table"><thead><tr><th>ชื่อ</th><th>Chat ID</th></tr></thead><tbody>' + r.chats.map(function (c) { return '<tr><td>' + esc(c.name) + '</td><td><code>' + esc(c.id) + '</code></td></tr>'; }).join('') + '</tbody></table></div><div class="field-hint" style="margin-top:8px">คัดลอก Chat ID ไปใส่ในช่อง "Chat ID ผู้ดูแล"</div>' : '<div class="field-hint">ยังไม่มีใครทักบอท — ส่งลิงก์บอทให้ผู้ดูแลกด /start ก่อน</div>' }); }).catch(function (e) { Spinner.hide(); toast(e.message, 'error'); }); });

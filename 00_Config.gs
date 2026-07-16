@@ -15,8 +15,8 @@ var APP = Object.freeze({
   NAME: 'ระบบงานปกครองนักเรียน',
   SHORT: 'SAM',
   TITLE: 'ระบบงานปกครองนักเรียน · Student Affairs',
-  VERSION: '1.0.4',
-  LAST_UPDATED: '2026-07-14',
+  VERSION: '1.0.6',
+  LAST_UPDATED: '2026-07-16',
   ORG: 'โรงเรียนในสังกัด สพฐ.',
   DESCRIPTION: 'ระบบบันทึกมาสาย · ขออนุญาตกลับบ้าน · หักคะแนนความประพฤติ พร้อมรายงานครบวงจร',
   LOGO_ICON: 'shield-check',
@@ -54,7 +54,7 @@ var SCHEMAS = Object.freeze({
   LeaveRecords: ['id', 'date', 'time', 'student_id', 'reason', 'guardian_name', 'guardian_phone',
                  'relation', 'photo_url', 'note', 'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
   BehaviorRecords: ['id', 'date', 'time', 'student_id', 'kind', 'offense_code', 'offense_name',
-                    'category', 'detail', 'points', 'score_after', 'photo_url',
+                    'category', 'detail', 'points', 'score_after', 'photo_url', 'ref_id',
                     'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
   OffenseTypes: ['code', 'name', 'category', 'points', 'icon', 'color', 'is_active', 'sort_order', 'created_at', 'updated_at'],
   Settings: ['key', 'value', 'updated_at'],
@@ -66,8 +66,8 @@ var SCHEMAS = Object.freeze({
 var SCHEMAS_LITE = Object.freeze({
   Students: ['id', 'prefix', 'first_name', 'last_name', 'class_level', 'room', 'number', 'score', 'advisor_name', 'status'],
   LateRecords: ['id', 'date', 'time', 'student_id', 'reason', 'created_by_name', 'canceled'],
-  LeaveRecords: ['id', 'date', 'time', 'student_id', 'reason', 'guardian_name', 'relation', 'photo_url', 'created_by_name', 'canceled'],
-  BehaviorRecords: ['id', 'date', 'time', 'student_id', 'kind', 'offense_name', 'category', 'points', 'score_after', 'created_by_name', 'canceled']
+  LeaveRecords: ['id', 'date', 'time', 'student_id', 'reason', 'guardian_name', 'guardian_phone', 'relation', 'photo_url', 'created_by_name', 'canceled'],
+  BehaviorRecords: ['id', 'date', 'time', 'student_id', 'kind', 'offense_code', 'offense_name', 'category', 'points', 'score_after', 'ref_id', 'created_by_name', 'canceled']
 });
 
 // ── คอลัมน์ที่ต้องบังคับเป็น TEXT (กัน Sheet auto-coerce) ────────

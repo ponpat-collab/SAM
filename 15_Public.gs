@@ -62,13 +62,20 @@ function Public_leaveSubmit(p) {
   var today = cfg_today_();
   var todayCnt = DB_byLite(SHEETS.LEAVE, 'student_id', id).filter(function (r) { return cfg_d10_(r.date) === today && !_yes_(r.canceled); }).length;
   if (todayCnt >= 2) throw new Error('วันนี้ยื่นขอกลับบ้านครบจำนวนแล้ว — ติดต่อครูเวร');
+  // นักเรียนถ่ายรูปเอง (base64 · ปรับขนาดฝั่ง client แล้ว) → อัปโหลด Drive → ลิงก์ lh3
+  var photoUrl = '';
+  var photo = String((p && p.photo) || '');
+  if (photo) {
+    try { photoUrl = _saveImageDataUrl_(photo, 'หลักฐานลากลับ', 'self_' + id + '_' + Date.now()).url; }
+    catch (e) { photoUrl = ''; }   // ถ่ายรูปไม่สำเร็จไม่บล็อกการยื่น (เน็ตเพื่อนมีปัญหา)
+  }
   var rec;
   DB_withLock_(function () {
     rec = DB_insert(SHEETS.LEAVE, {
       id: _genSeq_('E', DB_rowCount(SHEETS.LEAVE)), date: today, time: cfg_timeNow_(), student_id: id,
       reason: cfg_str_(p && p.reason, 60).trim() || 'ไม่ระบุ', guardian_name: guardian,
       guardian_phone: cfg_str_(p && p.guardian_phone, 20).trim(), relation: cfg_str_(p && p.relation, 40).trim(),
-      photo_url: '', note: 'ยื่นผ่านนักเรียน — รอครูตรวจสอบผู้ปกครอง',
+      photo_url: photoUrl, note: 'ยื่นผ่านนักเรียน — รอครูตรวจสอบผู้ปกครอง',
       created_by: 'self', created_by_name: PUBLIC_SELF.full_name, canceled: 'no'
     });
   });

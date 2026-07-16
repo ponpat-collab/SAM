@@ -91,7 +91,32 @@
       '<div class="board-wrap">' +
         '<div class="board-col"><div class="board-h amber"><span class="bt"><i class="bi bi-clock-history"></i> มาสายวันนี้</span><span class="bc" id="board-late-c">0</span></div><div class="board-body" id="board-late"></div></div>' +
         '<div class="board-col"><div class="board-h sky"><span class="bt"><i class="bi bi-house-heart"></i> ขอกลับบ้านวันนี้</span><span class="bc" id="board-leave-c">0</span></div><div class="board-body" id="board-leave"></div></div>' +
-      '</div><div class="board-foot" id="board-foot">กำลังโหลด…</div>';
+      '</div><div class="board-foot" id="board-foot">กำลังโหลด…</div>' +
+      '<div class="board-act sd-no-print"><button class="btn btn-ghost btn-sm" id="board-print"><i class="bi bi-printer"></i> พิมพ์กระดานวันนี้</button></div>';
+    $('#board-print').addEventListener('click', function (ev) {
+      A.runBtn(ev.currentTarget, function () {
+        return call('board.today', {}).then(function (d) {
+          if (!d.late.length && !d.leave.length) { toast('วันนี้ยังไม่มีรายการ', 'warning'); return; }
+          A.printDoc({
+            title: 'สรุปมาสาย / ขอกลับบ้าน ประจำวัน', sub: TH.dateLongWeekday(new Date()),
+            summary: '<b>สรุป:</b> มาสาย ' + d.late_count + ' คน · ขอกลับบ้าน ' + d.leave_count + ' คน',
+            html: '<h3 style="font-family:Kanit;font-size:13pt;margin:10px 0 6px">มาสายวันนี้ (' + d.late_count + ')</h3>' +
+              A.prTable([
+                { label: 'เวลา', k: 'time' }, { label: 'รหัส', k: 'sid' }, { label: 'ชื่อ-สกุล', k: 'name' },
+                { label: 'ชั้น/ห้อง', k: 'cr' }, { label: 'ครูที่ปรึกษา', fmt: function (r) { return r.advisor || '-'; } },
+                { label: 'สาเหตุ', k: 'reason' }
+              ], d.late) +
+              '<h3 style="font-family:Kanit;font-size:13pt;margin:12px 0 6px">ขอกลับบ้านวันนี้ (' + d.leave_count + ')</h3>' +
+              A.prTable([
+                { label: 'เวลา', k: 'time' }, { label: 'รหัส', k: 'sid' }, { label: 'ชื่อ-สกุล', k: 'name' },
+                { label: 'ชั้น/ห้อง', k: 'cr' }, { label: 'ครูที่ปรึกษา', fmt: function (r) { return r.advisor || '-'; } },
+                { label: 'เหตุผล', k: 'reason' }, { label: 'ผู้มารับ', fmt: function (r) { return (r.guardian || '-') + (r.relation ? ' (' + r.relation + ')' : ''); } },
+                { label: 'เบอร์โทร', fmt: function (r) { return r.phone || '-'; } }
+              ], d.leave)
+          });
+        });
+      }, { loading: 'กำลังเตรียมเอกสาร…' }).catch(function () {});
+    });
     loadBoard(false);
     BOARD_TIMER = setInterval(function () {
       if (!page() || location.hash !== '#/board') { clearInterval(BOARD_TIMER); BOARD_TIMER = null; return; }
@@ -99,9 +124,15 @@
     }, 20000);
   }
   function boardItem(r, isLeave) {
-    return '<div class="brow' + (r.self ? ' self' : '') + '"><div class="btime">' + esc(r.time) + '</div>' +
-      '<div class="bmain"><div class="bnm">' + esc(r.name) + (r.self ? ' <span class="bself">นักเรียนบันทึก</span>' : '') + '</div>' +
-      '<div class="bmeta">' + esc(r.cr) + ' · ' + esc(r.reason || '-') + (isLeave && r.guardian ? ' · ผู้รับ: ' + esc(r.guardian) : '') + '</div></div></div>';
+    var body = '<div class="bnm">' + esc(r.name) + (r.self ? ' <span class="bself">นักเรียนบันทึก</span>' : '') + '</div>' +
+      '<div class="bmeta">รหัส ' + esc(r.sid || '-') + ' · ' + esc(r.cr) + (r.advisor ? ' · ครูที่ปรึกษา: ' + esc(r.advisor) : '') + '</div>' +
+      '<div class="bmeta2"><i class="bi bi-chat-left-text"></i> ' + esc(r.reason || '-') + '</div>';
+    if (isLeave) {
+      body += '<div class="bmeta2"><i class="bi bi-person-heart"></i> ผู้ปกครอง: ' + esc(r.guardian || '-') + (r.relation ? ' (' + esc(r.relation) + ')' : '') +
+        (r.phone ? ' · <a href="tel:' + esc(r.phone) + '" class="btel"><i class="bi bi-telephone-fill"></i> ' + esc(r.phone) + '</a>' : '') + '</div>';
+      if (r.photo) body += '<button type="button" class="board-photo" data-photo="' + esc(r.photo) + '"><i class="bi bi-image"></i> ดูรูปหลักฐาน</button>';
+    }
+    return '<div class="brow' + (r.self ? ' self' : '') + '"><div class="btime">' + esc(r.time) + '</div><div class="bmain">' + body + '</div></div>';
   }
   function boardEmpty(t) { return '<div class="board-empty"><i class="bi bi-inbox"></i><div>' + esc(t) + '</div></div>'; }
   function loadBoard(silent) {
@@ -179,11 +210,34 @@
     SCAN.student = null; SCAN.photo = '';
     var inp = $('#scan-input'); if (inp) { inp.value = ''; try { inp.focus(); } catch (e) {} }
   }
+  function isOtherReason(r) { return /อื่น/.test(String(r || '')); }
   function reasonGrid(reasons, sel) {
-    return '<div class="reason-grid">' + reasons.map(function (r) { return '<button type="button" class="reason-btn' + (r === sel ? ' on' : '') + '" data-reason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div>';
+    return '<div class="reason-grid">' + reasons.map(function (r) { return '<button type="button" class="reason-btn' + (r === sel ? ' on' : '') + '" data-reason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div>' +
+      '<div class="field reason-other" id="rs-other" hidden style="margin-top:10px"><label>ระบุรายละเอียดเพิ่มเติม <span class="req">*</span></label>' +
+      '<input class="input" id="rs-detail" maxlength="200" placeholder="พิมพ์รายละเอียดของ &quot;อื่นๆ&quot;"></div>';
   }
   function wireReasons(pv) {
-    $$('.reason-btn', pv).forEach(function (b) { b.addEventListener('click', function () { $$('.reason-btn', pv).forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); SCAN.reason = b.getAttribute('data-reason'); }); });
+    $$('.reason-btn', pv).forEach(function (b) {
+      b.addEventListener('click', function () {
+        $$('.reason-btn', pv).forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on'); SCAN.reason = b.getAttribute('data-reason'); toggleOther(pv);
+      });
+    });
+    toggleOther(pv);
+  }
+  function toggleOther(pv) {
+    var w = $('#rs-other', pv); if (!w) return;
+    var on = isOtherReason(SCAN.reason);
+    w.hidden = !on;
+    if (on) { var d = $('#rs-detail', pv); if (d) setTimeout(function () { try { d.focus(); } catch (e) {} }, 60); }
+  }
+  // เหตุผลที่จะบันทึก — ถ้าเลือก "อื่นๆ" ต้องพิมพ์รายละเอียด (คืน null = ยังไม่ผ่าน)
+  function scanReason(pv) {
+    var r = SCAN.reason || 'ไม่ระบุ';
+    if (!isOtherReason(r)) return r;
+    var d = $('#rs-detail', pv), v = d ? d.value.trim() : '';
+    if (!v) { toast('กรุณาพิมพ์รายละเอียดของ "' + r + '"', 'warning'); if (d) try { d.focus(); } catch (e) {} return null; }
+    return r + ': ' + v;
   }
 
   // ── SCAN: LATE ──
@@ -199,8 +253,9 @@
       wire: function (pv, d) {
         wireReasons(pv);
         $('#late-save', pv).addEventListener('click', function (ev) {
-          var note = $('#late-note', pv).value;
-          A.runBtn(ev.currentTarget, function () { return saveLate(d.student.id, SCAN.reason, note); }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
+          var note = $('#late-note', pv).value, rs = scanReason(pv);
+          if (rs === null) return;
+          A.runBtn(ev.currentTarget, function () { return saveLate(d.student.id, rs, note); }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
         });
       }
     });
@@ -223,18 +278,17 @@
           '<div class="grid-2" style="gap:12px"><div class="field"><label>ชื่อผู้ปกครองที่มารับ <span class="req">*</span></label><input class="input" id="lv-gname" placeholder="ชื่อ-สกุล"></div>' +
           '<div class="field"><label>เบอร์โทรศัพท์</label><input class="input" id="lv-phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div></div>' +
           '<div class="field"><label>ความสัมพันธ์</label><select class="select" id="lv-rel">' + relations.map(function (r) { return '<option>' + esc(r) + '</option>'; }).join('') + '</select></div>' +
-          '<div class="field"><label>รูปผู้ที่มารับ</label><div id="lv-cam"><div class="cam-box" id="lv-cambox"><i class="bi bi-camera-fill"></i><div class="t">แตะเพื่อถ่ายรูป/เลือกรูปผู้มารับ</div><div class="s">เปิดกล้องหน้า/หลังของอุปกรณ์</div></div><input type="file" accept="image/*" capture="environment" id="lv-file" hidden></div></div>' +
+          '<div class="field"><label>รูปผู้ที่มารับ</label><div id="lv-cam"></div></div>' +
           '<button class="btn btn-primary btn-block btn-lg" id="lv-save"><i class="bi bi-check2-circle"></i> บันทึกการลากลับ</button>';
       },
       wire: function (pv, d) {
         wireReasons(pv);
-        var fileInp = $('#lv-file', pv), camBox = $('#lv-cambox', pv);
-        camBox.addEventListener('click', function () { fileInp.click(); });
-        fileInp.addEventListener('change', function () { if (fileInp.files && fileInp.files[0]) handlePhoto(fileInp.files[0], pv); });
+        renderCamBox(pv);
         $('#lv-save', pv).addEventListener('click', function (ev) {
           var gname = $('#lv-gname', pv).value.trim();
           if (!gname) { toast('กรุณากรอกชื่อผู้ปกครองที่มารับ', 'warning'); return; }
-          var payload = { student_id: d.student.id, reason: SCAN.reason, guardian_name: gname, guardian_phone: $('#lv-phone', pv).value.trim(), relation: $('#lv-rel', pv).value, photo_url: SCAN.photo };
+          var rs = scanReason(pv); if (rs === null) return;
+          var payload = { student_id: d.student.id, reason: rs, guardian_name: gname, guardian_phone: $('#lv-phone', pv).value.trim(), relation: $('#lv-rel', pv).value, photo_url: SCAN.photo };
           A.runBtn(ev.currentTarget, function () {
             return call('leave.save', payload).then(function (r) { toast('บันทึกลากลับ: ' + r.student_name, 'success'); afterSave(r.student_name, 'ลากลับ · ผู้รับ ' + gname); });
           }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
@@ -242,35 +296,38 @@
       }
     });
   });
-  function handlePhoto(file, pv) {
-    Spinner.show('กำลังเตรียมรูป…');
-    var rd = new FileReader();
-    rd.onload = function () {
-      var img = new Image();
-      img.onload = function () {
-        var s = Math.min(1, 900 / Math.max(img.width, img.height));
-        var cv = document.createElement('canvas'); cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
-        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        var dataUrl = cv.toDataURL('image/jpeg', 0.75);
-        var st = SCAN.student, fn = A.today().replace(/-/g, '') + '_' + TH.time(new Date()).replace(/[: น.]/g, '') + '_' + (st ? st.id : '') ;
-        call('file.upload', { data: dataUrl, name: fn, folder: 'หลักฐานลากลับ' }).then(function (r) {
-          Spinner.hide(); SCAN.photo = r.url;
-          var box = $('#lv-cam', pv);
-          box.innerHTML = '<div class="cam-preview"><img src="' + esc(dataUrl) + '"><button type="button" class="rm" id="lv-rm"><i class="bi bi-x-lg"></i></button></div>';
-          $('#lv-rm', pv).addEventListener('click', function () { SCAN.photo = ''; renderCamBox(pv); });
-        }).catch(function (e) { Spinner.hide(); toast('อัปโหลดรูปไม่สำเร็จ: ' + e.message, 'error'); });
-      };
-      img.onerror = function () { Spinner.hide(); toast('อ่านรูปไม่สำเร็จ', 'error'); };
-      img.src = rd.result;
-    };
-    rd.readAsDataURL(file);
+  // อัปโหลดรูป (จากกล้องหรือไฟล์) → Drive → เก็บลิงก์ lh3 ใน SCAN.photo
+  function uploadPhoto(dataUrl, pv) {
+    Spinner.show('กำลังอัปโหลดรูป…');
+    var st = SCAN.student, fn = A.today().replace(/-/g, '') + '_' + TH.time(new Date()).replace(/[: น.]/g, '') + '_' + (st ? st.id : '');
+    return call('file.upload', { data: dataUrl, name: fn, folder: 'หลักฐานลากลับ' }).then(function (r) {
+      Spinner.hide(); SCAN.photo = r.url;
+      var box = $('#lv-cam', pv); if (!box) return;
+      box.innerHTML = '<div class="cam-preview"><img src="' + esc(dataUrl) + '" alt="รูปผู้มารับ"><button type="button" class="rm" id="lv-rm" aria-label="ลบรูป"><i class="bi bi-x-lg"></i></button></div>';
+      $('#lv-rm', pv).addEventListener('click', function () { SCAN.photo = ''; renderCamBox(pv); });
+    }).catch(function (e) { Spinner.hide(); toast('อัปโหลดรูปไม่สำเร็จ: ' + e.message, 'error'); });
   }
+  // กล่องรูป: ถ่ายด้วยกล้อง (มือถือ/webcam คอม) หรือเลือกไฟล์ในเครื่อง
   function renderCamBox(pv) {
-    var box = $('#lv-cam', pv);
-    box.innerHTML = '<div class="cam-box" id="lv-cambox"><i class="bi bi-camera-fill"></i><div class="t">แตะเพื่อถ่ายรูป/เลือกรูปผู้มารับ</div><div class="s">เปิดกล้องหน้า/หลังของอุปกรณ์</div></div><input type="file" accept="image/*" capture="environment" id="lv-file" hidden>';
-    var fileInp = $('#lv-file', pv), camBox = $('#lv-cambox', pv);
-    camBox.addEventListener('click', function () { fileInp.click(); });
-    fileInp.addEventListener('change', function () { if (fileInp.files && fileInp.files[0]) handlePhoto(fileInp.files[0], pv); });
+    var box = $('#lv-cam', pv); if (!box) return;
+    box.innerHTML = '<div class="cam-choose">' +
+      (A.hasCamera() ? '<button type="button" class="cam-box" id="lv-shot"><i class="bi bi-camera-fill"></i><div class="t">ถ่ายด้วยกล้อง</div><div class="s">กล้องมือถือ หรือ webcam</div></button>' : '') +
+      '<button type="button" class="cam-box alt" id="lv-pick"><i class="bi bi-image"></i><div class="t">เลือกรูปในเครื่อง</div><div class="s">JPG / PNG</div></button>' +
+      '</div><input type="file" accept="image/*" id="lv-file" hidden>';
+    var fileInp = $('#lv-file', pv), shot = $('#lv-shot', pv);
+    if (shot) shot.addEventListener('click', function () {
+      A.openCamera({ title: 'ถ่ายรูปผู้มารับ' })
+        .then(function (data) { uploadPhoto(data, pv); })
+        .catch(function (e) { if (e && e.message && !/ยกเลิก/.test(e.message)) toast(e.message, 'warning', 4500); });
+    });
+    $('#lv-pick', pv).addEventListener('click', function () { fileInp.click(); });
+    fileInp.addEventListener('change', function () {
+      if (!(fileInp.files && fileInp.files[0])) return;
+      Spinner.show('กำลังเตรียมรูป…');
+      A.fileToPhoto(fileInp.files[0]).then(function (data) { Spinner.hide(); uploadPhoto(data, pv); })
+        .catch(function (e) { Spinner.hide(); toast(e.message, 'error'); });
+      fileInp.value = '';
+    });
   }
 
   // ── SCAN: BEHAVIOR ──

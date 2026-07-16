@@ -15,6 +15,24 @@ function _clampScore_(v, map) {
   return Math.max(0, Math.min(start, Math.round(v)));
 }
 
+// ── คะแนน = ค่าที่ "คำนวณจากรายการ" เสมอ (ไม่ใช่บวก/ลบสะสม) ──
+// เหตุผล: ยกเลิกรายการใด ๆ (รวมที่หักอัตโนมัติจากมาสาย) คะแนนต้องกลับถูกต้องเสมอ
+// การบวก/ลบ delta เพี้ยนถาวรเมื่อเคยชนเพดาน clamp 0/100 มาก่อน
+function _behaviorSum_(sid) {
+  var sum = 0;
+  DB_byLite(SHEETS.BEHAVIOR, 'student_id', String(sid)).forEach(function (r) {
+    if (!_yes_(r.canceled)) sum += cfg_num_(r.points);
+  });
+  return sum;
+}
+function _scoreOf_(sid, map) { return _clampScore_((cfg_num_(map.start_score) || 100) + _behaviorSum_(sid), map); }
+// เรียกภายใน DB_withLock_ เสมอ (อ่านรายการล่าสุด → เขียนคะแนนที่ถูก)
+function _recomputeScore_(sid, map) {
+  var sc = _scoreOf_(sid, map);
+  DB_update(SHEETS.STUDENTS, sid, { score: sc });
+  return sc;
+}
+
 // ── OffenseTypes (configurable master data) ────────────────────
 function Offenses_list(user, p) {
   var activeOnly = !(p && p.all);
@@ -101,15 +119,17 @@ function Behavior_save(user, p) {
   var detail = cfg_str_(p && p.detail, 300).trim();
   var photoUrl = cfg_str_(p && p.photo_url, 300).trim();
   var date = cfg_dateOnly_((p && p.date) || new Date()) || cfg_today_();
-  var map = Settings_map_(), signed = kind === 'add' ? pts : -pts, rec, scoreAfter, alert;
+  var map = Settings_map_(), signed = kind === 'add' ? pts : -pts, rec, scoreAfter, scoreBefore, alert;
   DB_withLock_(function () {
     var fresh = DB_getFresh(SHEETS.STUDENTS, sid);
     if (!fresh) throw new Error('ไม่พบนักเรียน');
-    scoreAfter = _clampScore_(cfg_num_(fresh.score) + signed, map);
+    var sum = _behaviorSum_(sid);                                  // รายการที่ยังไม่ยกเลิก (ยังไม่รวมรายการนี้)
+    scoreBefore = _clampScore_((cfg_num_(map.start_score) || 100) + sum, map);
+    scoreAfter = _clampScore_((cfg_num_(map.start_score) || 100) + sum + signed, map);
     rec = DB_insert(SHEETS.BEHAVIOR, {
       id: _genSeq_('B', DB_rowCount(SHEETS.BEHAVIOR)), date: date, time: cfg_timeNow_(), student_id: sid, kind: kind,
       offense_code: offenseCode, offense_name: offenseName, category: category, detail: detail, points: signed,
-      score_after: scoreAfter, photo_url: photoUrl, created_by: user.id, created_by_name: user.full_name, canceled: 'no'
+      score_after: scoreAfter, photo_url: photoUrl, ref_id: '', created_by: user.id, created_by_name: user.full_name, canceled: 'no'
     });
     DB_update(SHEETS.STUDENTS, sid, { score: scoreAfter });
   });
@@ -121,7 +141,7 @@ function Behavior_save(user, p) {
         _tgEsc_(offenseName) + ' · ' + (signed > 0 ? '+' : '') + signed + ' คะแนน\nคงเหลือ ' + scoreAfter + ' คะแนน · โดย ' + _tgEsc_(user.full_name));
     }
   } catch (e) {}
-  _behaviorDeductAlert_(stu, scoreAfter, scoreAfter - signed, map);
+  _behaviorDeductAlert_(stu, scoreAfter, scoreBefore, map);
   return { ok: true, record: rec, student_name: _stuName_(stu), score_after: scoreAfter, alert: alert };
 }
 
@@ -143,20 +163,57 @@ function _behaviorDeductAlert_(stu, scoreAfter, scoreBefore, map) {
   } catch (e) {}
 }
 
-function Behavior_autoDeduct_(user, sid, pts, detail) {
+// หักอัตโนมัติ — สร้าง "รายการหักคะแนน" จริง (เห็นและยกเลิกได้ในหน้ารายการ) + ผูก ref_id กับรายการมาสายต้นทาง
+function Behavior_autoDeduct_(user, sid, pts, detail, refId) {
   var map = Settings_map_(), scoreAfter, rec;
   DB_withLock_(function () {
     var fresh = DB_getFresh(SHEETS.STUDENTS, sid);
     if (!fresh) throw new Error('ไม่พบนักเรียน');
-    scoreAfter = _clampScore_(cfg_num_(fresh.score) - Math.abs(pts), map);
+    scoreAfter = _clampScore_((cfg_num_(map.start_score) || 100) + _behaviorSum_(sid) - Math.abs(pts), map);
     rec = DB_insert(SHEETS.BEHAVIOR, {
       id: _genSeq_('B', DB_rowCount(SHEETS.BEHAVIOR)), date: cfg_today_(), time: cfg_timeNow_(), student_id: sid, kind: 'deduct',
       offense_code: 'AUTO', offense_name: 'มาสายเกินกำหนด', category: 'การมาเรียน', detail: detail, points: -Math.abs(pts),
-      score_after: scoreAfter, photo_url: '', created_by: user.id, created_by_name: user.full_name + ' (อัตโนมัติ)', canceled: 'no'
+      score_after: scoreAfter, photo_url: '', ref_id: String(refId || ''),
+      created_by: user.id, created_by_name: user.full_name + ' (อัตโนมัติ)', canceled: 'no'
     });
     DB_update(SHEETS.STUDENTS, sid, { score: scoreAfter });
   });
   return { record: rec, score_after: scoreAfter };
+}
+
+// ยกเลิกรายการหักอัตโนมัติที่ผูกกับรายการมาสาย (เรียกจาก Late_cancel) — คืนคะแนนให้อัตโนมัติ
+function Behavior_cancelByRef_(sid, refId, map) {
+  var autos = DB_byLite(SHEETS.BEHAVIOR, 'student_id', String(sid)).filter(function (r) {
+    return String(r.ref_id || '') === String(refId) && !_yes_(r.canceled);
+  });
+  if (!autos.length) return null;
+  var score = null;
+  DB_withLock_(function () {
+    autos.forEach(function (a) { DB_update(SHEETS.BEHAVIOR, a.id, { canceled: 'yes' }); });
+    score = _recomputeScore_(sid, map);
+  });
+  return { canceled: autos.length, score_after: score };
+}
+
+// คำนวณคะแนนใหม่ทั้งระบบจากรายการจริง (ซ่อมข้อมูลที่เคยเพี้ยนจากการบวก/ลบสะสม) — single scan + batch
+function Behavior_recomputeAll(user, p) {
+  Auth_requireCap(user, 'student.manage');
+  var map = Settings_map_(), start = cfg_num_(map.start_score) || 100, sums = {};
+  DB_readLite(SHEETS.BEHAVIOR).forEach(function (r) {
+    if (_yes_(r.canceled)) return;
+    var k = String(r.student_id);
+    sums[k] = (sums[k] || 0) + cfg_num_(r.points);
+  });
+  var stus = DB_readLite(SHEETS.STUDENTS), fixed = 0;
+  DB_beginBatch();
+  try {
+    stus.forEach(function (s) {
+      var want = _clampScore_(start + (sums[String(s.id)] || 0), map);
+      if (cfg_num_(s.score) !== want) { DB_update(SHEETS.STUDENTS, s.id, { score: want }); fixed++; }
+    });
+  } finally { DB_endBatch(); }
+  Audit_log_(user, 'score.recompute', 'student', '', { fixed: fixed, total: stus.length });
+  return { ok: true, fixed: fixed, total: stus.length };
 }
 
 function Behavior_list(user, p) {
@@ -186,7 +243,8 @@ function Behavior_list(user, p) {
     var s = stuIx[String(r.student_id)];
     return { id: r.id, date: cfg_d10_(r.date), time: r.time, student_id: r.student_id, name: s ? _stuName_(s) : '(ไม่พบ)',
       class_room: s ? _stuClassRoom_(s) : '', kind: r.kind, offense_name: r.offense_name, category: r.category,
-      points: cfg_num_(r.points), score_after: cfg_num_(r.score_after), created_by_name: r.created_by_name, canceled: _yes_(r.canceled) };
+      auto: String(r.offense_code || '') === 'AUTO', points: cfg_num_(r.points), score_after: cfg_num_(r.score_after),
+      created_by_name: r.created_by_name, canceled: _yes_(r.canceled) };
   });
   return { items: items, total: total, page: page, per_page: per, pages: Math.ceil(total / per) };
 }
@@ -198,12 +256,11 @@ function Behavior_cancel(user, p) {
   if (!r) throw new Error('ไม่พบรายการ');
   if (_yes_(r.canceled)) throw new Error('รายการนี้ถูกยกเลิกแล้ว');
   if (!hasCap_(user.role, 'behavior.view_all') && String(r.created_by) !== String(user.id)) throw new Error('ยกเลิกได้เฉพาะรายการที่คุณบันทึกเอง');
-  var map = Settings_map_(), signed = cfg_num_(r.points), sid = String(r.student_id);
+  var map = Settings_map_(), signed = cfg_num_(r.points), sid = String(r.student_id), score = null;
   DB_withLock_(function () {
-    var fresh = DB_getFresh(SHEETS.STUDENTS, sid);
-    if (fresh) DB_update(SHEETS.STUDENTS, sid, { score: _clampScore_(cfg_num_(fresh.score) - signed, map) });
     DB_update(SHEETS.BEHAVIOR, id, { canceled: 'yes' });
+    score = _recomputeScore_(sid, map);           // คำนวณใหม่จากรายการที่เหลือ — คืนคะแนนถูกเสมอ
   });
-  Audit_log_(user, 'behavior.cancel', 'behavior', id, { restore: -signed });
-  return { ok: true };
+  Audit_log_(user, 'behavior.cancel', 'behavior', id, { restore: -signed, score_after: score });
+  return { ok: true, score_after: score };
 }

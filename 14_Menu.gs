@@ -22,6 +22,7 @@ function onOpen() {
       .addSeparator()
       .addItem('⚡ ติดตั้ง Warm + GC Trigger', 'menu_installTriggers')
       .addItem('🔧 ซ่อมค่าตั้งค่า (text)', 'menu_repairSettings')
+      .addItem('🧮 คำนวณคะแนนนักเรียนใหม่', 'menu_recomputeScores')
       .addItem('🔑 รีเซ็ตรหัสผ่านบัญชีทดลอง', 'menu_resetDemoPw')
       .addSeparator()
       .addItem('🔗 เปิด Web App URL', 'menu_openWebApp')
@@ -66,6 +67,12 @@ function menu_clearDemo() {
   var r = Seed_clearDemo_(); ui.alert('เรียบร้อย', 'ลบ ' + r.removed + ' รายการ', ui.ButtonSet.OK);
 }
 function menu_repairSettings() { var r = Settings_repair({ role: 'admin' }, {}); SpreadsheetApp.getUi().alert('🔧 ซ่อมค่าตั้งค่า', 'บังคับเป็น text แล้ว ' + r.fixed + ' แถว', SpreadsheetApp.getUi().ButtonSet.OK); }
+function menu_recomputeScores() {
+  var ui = SpreadsheetApp.getUi();
+  if (ui.alert('คำนวณคะแนนใหม่', 'คำนวณคะแนนนักเรียนทุกคนใหม่จากรายการหัก/เพิ่มคะแนนที่ยังไม่ยกเลิก\n(ใช้ซ่อมคะแนนที่เพี้ยน — รายการที่ยกเลิกแล้วจะถูกคืนคะแนนให้ถูกต้อง)', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var r = Behavior_recomputeAll({ role: 'admin', id: 'menu', full_name: 'เมนูชีต' }, {});
+  ui.alert('🧮 คำนวณคะแนนใหม่แล้ว', 'ปรับคะแนน ' + r.fixed + ' คน จากทั้งหมด ' + r.total + ' คน', ui.ButtonSet.OK);
+}
 function menu_resetDemoPw() {
   var ui = SpreadsheetApp.getUi();
   if (ui.alert('รีเซ็ตรหัสผ่านบัญชีทดลอง', 'รีเซ็ต admin/teacher/advisor/director เป็น ' + DEMO_PASSWORD + '?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;

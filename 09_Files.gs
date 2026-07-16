@@ -35,25 +35,28 @@ function _subFolder_(root, path) {
 
 function Files_upload(user, p) {
   Auth_requireCap(user, 'file.upload');
-  var dataUrl = String((p && p.data) || '');
-  var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  var out = _saveImageDataUrl_(String((p && p.data) || ''), String((p && p.folder) || ''), String((p && p.name) || ''));
+  Audit_log_(user, 'file.upload', 'file', out.id, { folder: out.folder });
+  return out;
+}
+
+// core: บันทึกรูป base64 → Drive → ลิงก์ lh3 (ใช้ร่วมทั้ง staff auth + public self-service)
+function _saveImageDataUrl_(dataUrl, folderName, name) {
+  var m = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง');
   var mime = m[1];
   if (FILE_ALLOWED_MIME.indexOf(mime) < 0) throw new Error('รองรับเฉพาะไฟล์รูปภาพ (JPG/PNG/WEBP)');
   var bytes = Utilities.base64Decode(m[2]);
   if (bytes.length > FILE_MAX_BYTES) throw new Error('ไฟล์ใหญ่เกิน 6MB');
-  var sub = FILE_SUBFOLDERS.indexOf(String((p && p.folder) || '')) >= 0 ? String(p.folder) : 'หลักฐานลากลับ';
+  var sub = FILE_SUBFOLDERS.indexOf(String(folderName || '')) >= 0 ? String(folderName) : 'หลักฐานลากลับ';
   var ym = cfg_dateOnly_(new Date()).substring(0, 7);
-  var settings = Settings_map_();
-  var ay = settings.academic_year || '2569';
+  var ay = Settings_map_().academic_year || '2569';
   var folder = _subFolder_(_rootFolder_(), sub + '/' + ay + '-' + ym.substring(5));
   var ext = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
-  var fname = String((p && p.name) || (cfg_yymm_() + '_' + Date.now())).replace(/[\/\\:*?"<>|]/g, '_').substring(0, 80) + '.' + ext;
-  var blob = Utilities.newBlob(bytes, mime, fname);
-  var file = folder.createFile(blob);
+  var fname = String(name || (cfg_yymm_() + '_' + Date.now())).replace(/[\/\\:*?"<>|]/g, '_').substring(0, 80) + '.' + ext;
+  var file = folder.createFile(Utilities.newBlob(bytes, mime, fname));
   try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
   catch (e) { try { file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {} }
   var id = file.getId();
-  Audit_log_(user, 'file.upload', 'file', id, { folder: sub });
-  return { id: id, url: 'https://lh3.googleusercontent.com/d/' + id, view: 'https://drive.google.com/file/d/' + id + '/view' };
+  return { id: id, url: 'https://lh3.googleusercontent.com/d/' + id, view: 'https://drive.google.com/file/d/' + id + '/view', folder: sub };
 }

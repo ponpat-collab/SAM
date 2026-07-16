@@ -231,6 +231,42 @@
   A.wirePager = function (root, onGo) { $$('.pgb', root).forEach(function (b) { b.addEventListener('click', function () { if (!b.disabled) onGo(Number(b.getAttribute('data-pg'))); }); }); };
   A.wireImg = function (root) { $$('img.lh', root || document).forEach(function (im) { if (im.__w) return; im.__w = 1; im.addEventListener('error', function () { im.style.display = 'none'; }, { once: true }); }); };
 
+  // ── print document (ตัวกลางเดียวของทุกปุ่มพิมพ์) ──
+  // สร้างเอกสารจริงก่อนพิมพ์เสมอ + toggle body.prt-on (CSS ซ่อนแอปเฉพาะตอนนี้)
+  // ห้ามเรียก window.print() ตรง ๆ จากที่ไหน — จะได้หน้าว่าง
+  A.printDoc = function (opts) {
+    opts = opts || {};
+    var b = Store.boot || {}, s = b.settings || {}, app = b.app || {};
+    var old = document.querySelector('.pr-only'); if (old) old.remove();
+    var doc = document.createElement('div');
+    doc.className = 'pr-only';
+    doc.innerHTML = '<div class="pr-doc">' +
+      '<div class="pr-title"><h2>' + esc(opts.title || 'รายงาน') + '</h2>' +
+        '<div class="sub">' + esc(s.org_name || app.name || '') + (s.academic_year ? ' · ปีการศึกษา ' + esc(s.academic_year) : '') + '</div></div>' +
+      (opts.sub ? '<div class="pr-meta"><span>' + esc(opts.sub) + '</span><span>พิมพ์เมื่อ ' + TH.dateTime(new Date()) + '</span></div>'
+                : '<div class="pr-meta"><span></span><span>พิมพ์เมื่อ ' + TH.dateTime(new Date()) + '</span></div>') +
+      (opts.summary ? '<div class="pr-sum">' + opts.summary + '</div>' : '') +
+      (opts.html || '') +
+      (opts.signatures === false ? '' : '<div class="pr-sign"><div class="s"><div class="line"></div>ครูที่ปรึกษา</div><div class="s"><div class="line"></div>หัวหน้าฝ่ายปกครอง</div><div class="s"><div class="line"></div>ผู้อำนวยการ</div></div>') +
+      '<div class="pr-foot">' + esc(app.name || '') + ' · ผู้พิมพ์: ' + esc((Store.user || {}).full_name || '-') + '</div>' +
+    '</div>';
+    document.body.appendChild(doc);
+    document.body.classList.add('prt-on');
+    try { window.print(); } catch (e) {}
+    setTimeout(function () { doc.remove(); document.body.classList.remove('prt-on'); }, 600);
+  };
+  // ตารางสำหรับเอกสารพิมพ์ — cols:[{k,label,align,fmt}]
+  A.prTable = function (cols, rows) {
+    if (!rows || !rows.length) return '<p style="text-align:center;padding:12px">ไม่มีข้อมูล</p>';
+    return '<table class="pr-table"><thead><tr>' + cols.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr>' + cols.map(function (c) {
+          var v = c.fmt ? c.fmt(r) : r[c.k];
+          return '<td' + (c.align ? ' style="text-align:' + c.align + '"' : '') + '>' + esc(v == null ? '' : String(v)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table>';
+  };
+
   // ── routing ──
   A.route = function (h, fn) { A.Routes[h] = fn; };
   function navTo(h) { if (h === location.hash) dispatch(); else location.hash = h; }
@@ -311,6 +347,9 @@
       if (act === 'close-manual') { e.preventDefault(); closeManual(); return; }
       if (act === 'refresh') { e.preventDefault(); dispatch(); return; }
     }
+    // ดูรูปหลักฐาน (lightbox)
+    var ph = t.closest && t.closest('[data-photo]');
+    if (ph) { e.preventDefault(); openPhoto(ph.getAttribute('data-photo')); return; }
     // hash nav (data-hash on any element)
     var hh = t.closest && t.closest('[data-hash]');
     if (hh) { e.preventDefault(); var nh = hh.getAttribute('data-hash'); if (nh && nh !== '#') navTo(nh); return; }
@@ -399,7 +438,7 @@
     var isLate = kind === 'late';
     var reasons = String((isLate ? s.late_reasons : s.leave_reasons) || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
     var relations = String(s.relations || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-    var st = { student: null, reason: reasons[0] || '', relation: relations[0] || '' };
+    var st = { student: null, reason: reasons[0] || '', relation: relations[0] || '', photo: '', detail: '' };
     var root = el('app-root'); root.className = '';
     root.innerHTML =
       '<div class="ss-stage"><div class="ss-card">' +
@@ -426,23 +465,72 @@
 
     function renderStep(d) {
       var s2 = d.student;
-      var reasonGrid = '<div class="ss-reasons">' + reasons.map(function (r) { return '<button type="button" class="ss-rbtn' + (r === st.reason ? ' on' : '') + '" data-ssreason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div>';
+      var reasonGrid = '<div class="ss-reasons">' + reasons.map(function (r) { return '<button type="button" class="ss-rbtn' + (r === st.reason ? ' on' : '') + '" data-ssreason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div>' +
+        '<div class="ss-field ss-other" id="ss-other-wrap" hidden><label>ระบุรายละเอียดเพิ่มเติม *</label>' +
+          '<textarea class="ss-tin ss-ta" id="ss-detail" rows="2" maxlength="200" placeholder="พิมพ์รายละเอียด เช่น ' + (isLate ? 'รถโรงเรียนเสีย' : 'ไปทำบัตรประชาชน') + '">' + esc(st.detail) + '</textarea></div>';
       var guardianFields = isLate ? '' :
         '<div class="ss-field"><label>ชื่อผู้ปกครองที่มารับ *</label><input class="ss-tin" id="ss-guardian" placeholder="ชื่อ-สกุลผู้ปกครอง"></div>' +
         '<div class="ss-field"><label>ความเกี่ยวข้อง</label><div class="ss-reasons">' + relations.map(function (r) { return '<button type="button" class="ss-rbtn' + (r === st.relation ? ' on' : '') + '" data-ssrel="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div></div>' +
-        '<div class="ss-field"><label>เบอร์โทรผู้ปกครอง (ถ้ามี)</label><input class="ss-tin" id="ss-phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>';
+        '<div class="ss-field"><label>เบอร์โทรผู้ปกครอง (ถ้ามี)</label><input class="ss-tin" id="ss-phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>' +
+        '<div class="ss-field"><label>รูปผู้ปกครองที่มารับ</label><div id="ss-cam"></div>' +
+        '<input type="file" accept="image/*" id="ss-file" hidden></div>';
       $('#ss-content').innerHTML =
         '<div class="ss-stu"><div class="ss-av">' + esc(fmt.initials(s2.name)) + '</div><div style="flex:1"><div class="ss-nm">' + esc(s2.name) + '</div><div class="ss-meta">ม.' + esc(s2.class_level) + '/' + esc(s2.room) + ' เลขที่ ' + esc(s2.number) + ' · รหัส ' + esc(s2.id) + '</div></div></div>' +
         (d.late_today || d.leave_today ? '<div class="ss-warn"><i class="bi bi-info-circle"></i> วันนี้: มาสาย ' + d.late_today + ' · ลากลับ ' + d.leave_today + '</div>' : '') +
         '<div class="ss-lbl">' + (isLate ? 'เลือกสาเหตุที่มาสาย' : 'เลือกเหตุผลที่ขอกลับ') + '</div>' + reasonGrid + guardianFields +
         '<button class="btn btn-primary btn-lg btn-block" id="ss-submit"><i class="bi bi-check2-circle"></i> ' + (isLate ? 'ยืนยันบันทึกมาสาย' : 'ยืนยันขออนุญาตกลับบ้าน') + '</button>';
-      $$('[data-ssreason]').forEach(function (btn) { btn.addEventListener('click', function () { $$('[data-ssreason]').forEach(function (x) { x.classList.remove('on'); }); btn.classList.add('on'); st.reason = btn.getAttribute('data-ssreason'); }); });
+      $$('[data-ssreason]').forEach(function (btn) { btn.addEventListener('click', function () { $$('[data-ssreason]').forEach(function (x) { x.classList.remove('on'); }); btn.classList.add('on'); st.reason = btn.getAttribute('data-ssreason'); ssOtherToggle(); }); });
       $$('[data-ssrel]').forEach(function (btn) { btn.addEventListener('click', function () { $$('[data-ssrel]').forEach(function (x) { x.classList.remove('on'); }); btn.classList.add('on'); st.relation = btn.getAttribute('data-ssrel'); }); });
+      var dt = $('#ss-detail'); if (dt) dt.addEventListener('input', function () { st.detail = dt.value; });
       $('#ss-submit').addEventListener('click', function (ev) { A.runBtn(ev.currentTarget, submit, { loading: 'กำลังบันทึก…', success: 'สำเร็จ' }).catch(function () {}); });
+      ssOtherToggle();
+      if (!isLate) { st.photo = ''; ssRenderCam(); }
+    }
+    // เลือก "อื่นๆ" → ให้พิมพ์รายละเอียดเพิ่มเติมได้
+    function isOther(r) { return /อื่น/.test(String(r || '')); }
+    function ssOtherToggle() {
+      var w = $('#ss-other-wrap'); if (!w) return;
+      var on = isOther(st.reason);
+      w.hidden = !on;
+      if (on) { var d = $('#ss-detail'); if (d) setTimeout(function () { try { d.focus(); } catch (e) {} }, 60); } else { st.detail = ''; var d2 = $('#ss-detail'); if (d2) d2.value = ''; }
+    }
+    function reasonText() {
+      var r = st.reason || 'ไม่ระบุ';
+      return isOther(r) && st.detail.trim() ? r + ': ' + st.detail.trim() : r;
+    }
+    function ssRenderCam() {
+      var cam = $('#ss-cam'); if (!cam) return;
+      if (st.photo) {
+        cam.innerHTML = '<div class="ss-cam-prev"><img src="' + esc(st.photo) + '" alt="รูปผู้มารับ"><button type="button" class="ss-cam-rm" id="ss-cam-rm" aria-label="ลบรูป"><i class="bi bi-x-lg"></i></button></div>';
+        $('#ss-cam-rm').addEventListener('click', function () { st.photo = ''; ssRenderCam(); });
+      } else {
+        cam.innerHTML = '<div class="ss-cam-btns">' +
+          (A.hasCamera() ? '<button type="button" class="ss-cam-box" id="ss-cam-shot"><i class="bi bi-camera-fill"></i><span>ถ่ายด้วยกล้อง</span></button>' : '') +
+          '<button type="button" class="ss-cam-box alt" id="ss-cam-pick"><i class="bi bi-image"></i><span>เลือกรูปในเครื่อง</span></button></div>';
+        var shot = $('#ss-cam-shot');
+        if (shot) shot.addEventListener('click', function () {
+          A.openCamera({ title: 'ถ่ายรูปผู้ปกครองที่มารับ' })
+            .then(function (data) { st.photo = data; ssRenderCam(); })
+            .catch(function (e) { if (e && e.message && !/ยกเลิก/.test(e.message)) toast(e.message, 'warning', 4500); });
+        });
+        $('#ss-cam-pick').addEventListener('click', function () { var f = $('#ss-file'); if (f) f.click(); });
+      }
+      var fi = $('#ss-file');
+      if (fi && !fi.__w) {
+        fi.__w = 1;
+        fi.addEventListener('change', function () {
+          if (!(fi.files && fi.files[0])) return;
+          Spinner.show('กำลังเตรียมรูป…');
+          A.fileToPhoto(fi.files[0]).then(function (data) { st.photo = data; Spinner.hide(); ssRenderCam(); })
+            .catch(function (e) { Spinner.hide(); toast(e.message, 'error'); });
+          fi.value = '';
+        });
+      }
     }
     function submit() {
-      if (isLate) return call('public.late_submit', { student_id: st.student.id, reason: st.reason }).then(function (r) { renderDone(r); });
-      var payload = { student_id: st.student.id, reason: st.reason, guardian_name: (($('#ss-guardian') || {}).value || '').trim(), relation: st.relation, guardian_phone: (($('#ss-phone') || {}).value || '').trim() };
+      if (isOther(st.reason) && !st.detail.trim()) { toast('กรุณาพิมพ์รายละเอียดของ "' + st.reason + '"', 'warning'); var d = $('#ss-detail'); if (d) try { d.focus(); } catch (e) {} return Promise.reject(new Error('ระบุรายละเอียดไม่ครบ')); }
+      if (isLate) return call('public.late_submit', { student_id: st.student.id, reason: reasonText() }).then(function (r) { renderDone(r); });
+      var payload = { student_id: st.student.id, reason: reasonText(), guardian_name: (($('#ss-guardian') || {}).value || '').trim(), relation: st.relation, guardian_phone: (($('#ss-phone') || {}).value || '').trim(), photo: st.photo || '' };
       return call('public.leave_submit', payload).then(function (r) { renderDone(r); });
     }
     function renderDone(r) {
@@ -640,6 +728,97 @@
     }).catch(function () {});
   }
   A.refreshNavBadges = loadNavBadges;
+
+  // ── lightbox ดูรูปหลักฐาน (lh3 · no-referrer) ──
+  function openPhoto(url) {
+    if (!url) return;
+    Modal.open({
+      icon: 'image', title: 'รูปหลักฐาน',
+      html: '<div class="photo-lb"><img src="' + esc(url) + '" referrerpolicy="no-referrer" alt="รูปหลักฐาน"></div>',
+      footer: '<a class="btn btn-soft" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> เปิดในแท็บใหม่</a><button class="btn btn-ghost" data-action="close-modal">ปิด</button>'
+    });
+  }
+  A.openPhoto = openPhoto;
+
+  // ── กล้องในหน้าเว็บ (ใช้ได้ทั้งกล้องมือถือและ webcam คอม) ──
+  // หมายเหตุ: เมื่อเปิดผ่าน Google Apps Script (iframe) เบราว์เซอร์อาจปิดกั้นกล้อง → คืน error ให้ผู้เรียก fallback ไปเลือกไฟล์
+  A.hasCamera = function () { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.isSecureContext !== false); };
+  A.shrinkImage = function (src, maxPx, q) {   // src = dataURL/objectURL → dataURL ที่ย่อแล้ว
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var sc = Math.min(1, (maxPx || 900) / Math.max(img.width, img.height));
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL('image/jpeg', q || 0.72));
+      };
+      img.onerror = function () { reject(new Error('อ่านรูปไม่สำเร็จ')); };
+      img.src = src;
+    });
+  };
+  A.fileToPhoto = function (file) {   // ไฟล์จาก <input type="file"> → dataURL ย่อแล้ว
+    return new Promise(function (resolve, reject) {
+      if (!file) return reject(new Error('ไม่พบไฟล์'));
+      if (!/^image\//.test(file.type)) return reject(new Error('กรุณาเลือกไฟล์รูปภาพ'));
+      var rd = new FileReader();
+      rd.onload = function () { A.shrinkImage(rd.result).then(resolve).catch(reject); };
+      rd.onerror = function () { reject(new Error('อ่านไฟล์ไม่สำเร็จ')); };
+      rd.readAsDataURL(file);
+    });
+  };
+  A.openCamera = function (opts) {    // → Promise<dataURL> · reject เมื่อยกเลิก/เปิดกล้องไม่ได้
+    opts = opts || {};
+    return new Promise(function (resolve, reject) {
+      if (!A.hasCamera()) return reject(new Error('อุปกรณ์/เบราว์เซอร์นี้เปิดกล้องในหน้าเว็บไม่ได้ — ใช้ปุ่ม "เลือกรูป" แทน'));
+      var stream = null, facing = opts.facing || 'environment', done = false;
+      var host = document.createElement('div');
+      host.className = 'cam-modal';
+      host.innerHTML = '<div class="cam-card">' +
+        '<div class="cam-h"><span><i class="bi bi-camera-fill"></i> ' + esc(opts.title || 'ถ่ายรูป') + '</span>' +
+          '<button type="button" class="cam-x" data-camx aria-label="ปิด"><i class="bi bi-x-lg"></i></button></div>' +
+        '<div class="cam-view"><video id="cam-v" autoplay playsinline muted></video><div class="cam-hint" id="cam-hint">กำลังเปิดกล้อง…</div></div>' +
+        '<div class="cam-btns"><button type="button" class="btn btn-ghost btn-sm" data-camflip><i class="bi bi-arrow-repeat"></i> สลับกล้อง</button>' +
+          '<button type="button" class="cam-shot" data-camshot aria-label="ถ่ายรูป"><i class="bi bi-camera-fill"></i></button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-camx>ยกเลิก</button></div>' +
+      '</div>';
+      document.body.appendChild(host);
+      var v = host.querySelector('#cam-v'), hint = host.querySelector('#cam-hint');
+      function stop() { if (stream) { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} stream = null; } }
+      function close(err, data) {
+        if (done) return; done = true;
+        stop(); host.remove(); document.removeEventListener('keydown', onKey);
+        if (data) resolve(data); else reject(err || new Error('ยกเลิกการถ่ายรูป'));
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      function start() {
+        stop(); if (hint) hint.textContent = 'กำลังเปิดกล้อง…';
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false }).then(function (s) {
+          if (done) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; }
+          stream = s; v.srcObject = s; if (hint) hint.remove();
+          try { v.play(); } catch (e) {}
+        }).catch(function () {
+          close(new Error('เปิดกล้องไม่ได้ — โปรดอนุญาตสิทธิ์กล้อง หรือใช้ปุ่ม "เลือกรูป" แทน'));
+        });
+      }
+      host.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t === host || (t.closest && t.closest('[data-camx]'))) return close();
+        if (t.closest && t.closest('[data-camflip]')) { facing = facing === 'user' ? 'environment' : 'user'; start(); return; }
+        if (t.closest && t.closest('[data-camshot]')) {
+          var w = v.videoWidth, h = v.videoHeight;
+          if (!w || !h) { toast('กล้องยังไม่พร้อม รอสักครู่', 'warning'); return; }
+          var sc = Math.min(1, 900 / Math.max(w, h));
+          var cv = document.createElement('canvas');
+          cv.width = Math.round(w * sc); cv.height = Math.round(h * sc);
+          cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+          close(null, cv.toDataURL('image/jpeg', 0.72));
+        }
+      });
+      document.addEventListener('keydown', onKey);
+      start();
+    });
+  };
 
   // ── popovers ──
   function togglePop(id) { var p = el(id); if (!p) return; var open = p.classList.contains('show'); closeAllPops(); if (!open) p.classList.add('show'); }

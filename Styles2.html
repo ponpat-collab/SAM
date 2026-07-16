@@ -92,6 +92,25 @@
 .cam-preview{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .cam-preview img{width:100%;display:block;max-height:280px;object-fit:cover}
 .cam-preview .rm{position:absolute;top:8px;right:8px;width:32px;height:32px;border:0;border-radius:9px;background:rgba(15,23,42,.6);color:#fff;cursor:pointer;font-size:15px}
+.cam-choose{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.cam-box.alt{background:#fff;border-style:solid}
+.cam-box.alt i{color:var(--blue)}
+
+/* ── กล้องในหน้าเว็บ (มือถือ + webcam คอม) ── */
+.cam-modal{position:fixed;inset:0;z-index:200;background:rgba(2,6,23,.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px}
+.cam-card{width:min(560px,100%);background:#0f172a;border:1px solid rgba(255,255,255,.14);border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg)}
+.cam-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;color:#f1f5f9;font-family:Kanit;font-weight:700;font-size:15px;border-bottom:1px solid rgba(255,255,255,.1)}
+.cam-x{width:34px;height:34px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#f1f5f9;cursor:pointer;font-size:15px}
+.cam-x:hover{background:rgba(255,255,255,.2)}
+.cam-view{position:relative;background:#000;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+.cam-view video{width:100%;height:100%;object-fit:cover;display:block}
+.cam-hint{position:absolute;color:#cbd5e1;font-size:13px;font-weight:600}
+.cam-btns{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:#0b1220}
+.cam-btns .btn-ghost{background:rgba(255,255,255,.08);color:#e2e8f0;border-color:rgba(255,255,255,.14)}
+.cam-btns .btn-ghost:hover{background:rgba(255,255,255,.16)}
+.cam-shot{width:62px;height:62px;border-radius:50%;border:4px solid rgba(255,255,255,.85);background:var(--blue);color:#fff;font-size:23px;cursor:pointer;flex:none;transition:.15s}
+.cam-shot:hover{transform:scale(1.05)}
+.cam-shot:active{transform:scale(.94)}
 
 /* ── student grid cards ── */
 .stu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
@@ -166,10 +185,13 @@
 
 /* ── print document ── */
 .pr-only{display:none}
+/* ★ ทุก rule ที่ซ่อนแอปต้อง scope ใต้ body.prt-on (ใส่ตอนสร้างเอกสารพิมพ์เท่านั้น)
+   ถ้าเขียนแบบ global แล้วมีที่ไหนเรียก window.print() โดยไม่สร้าง .pr-only → หน้าพิมพ์จะว่างเปล่า */
 @media print{
   body{background:#fff!important}
-  #app-root,#modal-host,#spin-host,#boot-loader,.navbar,.sidebar,.app-footer,.bottom-nav,.sb-backdrop,.toolbar,.pager,.sd-no-print{display:none!important}
-  .pr-only{display:block!important;position:static}
+  body.prt-on #app-root, body.prt-on #modal-host, body.prt-on #spin-host, body.prt-on #boot-loader{display:none!important}
+  .navbar,.sidebar,.app-footer,.bottom-nav,.sb-backdrop,.toolbar,.pager,.sd-no-print{display:none!important}
+  body.prt-on .pr-only{display:block!important;position:static}
   @page{size:A4 portrait;margin:14mm 12mm}
   .pr-doc{font-family:'Sarabun',sans-serif;color:#000;max-width:100%}
   .pr-head{display:flex;align-items:center;gap:12px;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:14px}
@@ -177,12 +199,17 @@
   .pr-title{text-align:center;margin-bottom:14px}
   .pr-title h2{font-family:'Kanit';margin:0;font-size:20pt}
   .pr-title .sub{font-size:11pt;color:#333}
+  .pr-meta{display:flex;justify-content:space-between;font-size:10pt;color:#333;border-bottom:1px solid #94a3b8;padding-bottom:6px;margin-bottom:10px}
   .pr-table{width:100%;border-collapse:collapse;font-size:10.5pt;margin-bottom:12px}
   .pr-table th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pr-table td{border:1px solid #94a3b8;padding:5px 8px}
-  .pr-sign{display:flex;justify-content:space-around;margin-top:40px}
+  .pr-table tr{page-break-inside:avoid}
+  .pr-table thead{display:table-header-group}
+  .pr-sum{font-size:11pt;margin:8px 0 12px}
+  .pr-sign{display:flex;justify-content:space-around;margin-top:40px;page-break-inside:avoid}
   .pr-sign .s{text-align:center;font-size:10.5pt}
   .pr-sign .line{border-top:1px dotted #000;width:180px;margin:0 auto 6px}
+  .pr-foot{margin-top:18px;font-size:9pt;color:#555;text-align:right}
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
 
@@ -254,6 +281,8 @@
 .board-empty{text-align:center;color:var(--muted);padding:44px 12px}
 .board-empty i{font-size:40px;display:block;margin-bottom:8px;opacity:.5}
 .board-foot{text-align:center;color:var(--ink2);font-size:12.5px;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px}
+.board-act{display:flex;justify-content:center;margin-top:10px}
+.reason-other{margin-top:10px}
 @media(max-width:720px){.board-wrap{grid-template-columns:1fr}.board-col{min-height:44vh}}
 
 /* ── login: ปุ่ม self-service สำหรับนักเรียน ── */
@@ -302,4 +331,29 @@
 .ss-ds{font-size:13px;color:var(--ink2);margin-top:6px}
 .ss-dbtns{display:flex;gap:10px;margin-top:20px}
 .ss-dbtns .btn{flex:1}
+
+/* ── board รายละเอียดเพิ่ม (เบอร์/ผู้ปกครอง/รูป) ── */
+.bmeta2{font-size:12px;color:var(--ink2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bmeta2 i{font-size:12.5px;color:var(--muted)}
+.btel{color:var(--blue);font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.btel:hover{text-decoration:underline}
+.board-photo{margin-top:8px;border:1px solid var(--blue);background:#eef5ff;color:var(--blue);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:700;font-family:'Kanit';cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.board-photo:hover{background:var(--blue);color:#fff}
+
+/* ── lightbox ดูรูป ── */
+.photo-lb{display:flex;align-items:center;justify-content:center;background:#0f172a;border-radius:12px;overflow:hidden;min-height:200px}
+.photo-lb img{max-width:100%;max-height:70vh;display:block;object-fit:contain}
+
+/* ── self-service: กล้องถ่ายรูป ── */
+.ss-cam-box{width:100%;border:2px dashed var(--line);border-radius:14px;background:#f8fbff;color:var(--ink2);padding:22px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;font-family:'Sarabun'}
+.ss-cam-box i{font-size:30px;color:var(--blue)}
+.ss-cam-box span{font-size:13px;font-weight:600}
+.ss-cam-box:active{transform:scale(.98)}
+.ss-cam-btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.ss-cam-box.alt{background:#fff;border-style:solid}
+.ss-ta{resize:vertical;min-height:60px;font-family:'Sarabun'}
+.ss-other{margin-top:10px}
+.ss-cam-prev{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.ss-cam-prev img{width:100%;display:block;max-height:280px;object-fit:cover}
+.ss-cam-rm{position:absolute;top:8px;right:8px;width:34px;height:34px;border:0;border-radius:50%;background:rgba(15,23,42,.72);color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 </style>

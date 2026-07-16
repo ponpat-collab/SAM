@@ -93,6 +93,7 @@ function _dispatch_(req) {
     case 'behavior.save': return Behavior_save(user, payload);
     case 'behavior.list': return Behavior_list(user, payload);
     case 'behavior.cancel': return Behavior_cancel(user, payload);
+    case 'behavior.recompute': return Behavior_recomputeAll(user, payload);
 
     case 'offense.list': return Offenses_list(user, payload);
     case 'offense.save': return Offenses_save(user, payload);

@@ -24,7 +24,7 @@ function Late_save(user, p) {
   });
   Audit_log_(user, 'late.create', 'late', rec.id, { student_id: sid });
   var map = Settings_map_(), auto = null;
-  if (_yes_(map.late_auto_deduct)) auto = _lateAutoDeduct_(user, stu, map);
+  if (_yes_(map.late_auto_deduct)) auto = _lateAutoDeduct_(user, stu, map, rec.id);
   return { ok: true, record: rec, student_name: _stuName_(stu), auto: auto };
 }
 
@@ -67,7 +67,9 @@ function _weekKey_(dateStr) {
   var monday = new Date(d.getTime() - day * 86400000);
   return Utilities.formatDate(monday, APP.TIMEZONE, 'yyyy-MM-dd');
 }
-function _lateAutoDeduct_(user, stu, map) {
+// หักคะแนนอัตโนมัติเมื่อมาสายครบเกณฑ์/สัปดาห์ — ผูก ref_id กับรายการมาสายที่ทำให้ครบ
+// (ยกเลิกรายการมาสายนั้น → รายการหักถูกยกเลิกและคะแนนคืนอัตโนมัติ)
+function _lateAutoDeduct_(user, stu, map, lateId) {
   var thr = cfg_int_(map.late_auto_threshold) || 3, pts = cfg_num_(map.late_auto_points) || 5;
   var today = cfg_today_(), wk = _weekKey_(today);
   var cnt = DB_byLite(SHEETS.LATE, 'student_id', stu.id).filter(function (r) {
@@ -75,7 +77,7 @@ function _lateAutoDeduct_(user, stu, map) {
   }).length;
   if (cnt > 0 && cnt % thr === 0) {
     try {
-      var b = Behavior_autoDeduct_(user, stu.id, pts, 'มาสายครบ ' + cnt + ' ครั้ง/สัปดาห์ (หักอัตโนมัติ)');
+      var b = Behavior_autoDeduct_(user, stu.id, pts, 'มาสายครบ ' + cnt + ' ครั้ง/สัปดาห์ (หักอัตโนมัติ)', lateId);
       return { deducted: true, points: pts, count: cnt, score_after: b.score_after };
     } catch (e) { return { deducted: false, error: e.message }; }
   }
@@ -120,6 +122,9 @@ function Late_cancel(user, p) {
   if (!r) throw new Error('ไม่พบรายการ');
   if (!hasCap_(user.role, 'late.view_all') && String(r.created_by) !== String(user.id)) throw new Error('ยกเลิกได้เฉพาะรายการที่คุณบันทึกเอง');
   DB_update(SHEETS.LATE, id, { canceled: 'yes' });
-  Audit_log_(user, 'late.cancel', 'late', id, {});
-  return { ok: true };
+  // คืนคะแนนที่หักอัตโนมัติจากรายการมาสายนี้ (ถ้ามี)
+  var restored = null;
+  try { restored = Behavior_cancelByRef_(String(r.student_id), id, Settings_map_()); } catch (e) {}
+  Audit_log_(user, 'late.cancel', 'late', id, { auto_restored: restored ? restored.canceled : 0 });
+  return { ok: true, restored: restored };
 }

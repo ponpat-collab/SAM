@@ -53,7 +53,8 @@ global.Utilities = {
   DigestAlgorithm: { SHA_256: 'SHA_256' }, Charset: { UTF_8: 'UTF_8' }
 };
 global.Session = { getActiveUser: function () { return { getEmail: function () { return 'test@example.com'; } }; } };
-global.DriveApp = { getFileById: function () { return { getParents: function () { return { hasNext: function () { return false; }, next: function () {} }; } }; }, getRootFolder: function () { return { getName: function () { return 'root'; }, getFoldersByName: function () { return { hasNext: function () { return false; } }; }, createFolder: function () { return this; } }; }, Access: {}, Permission: {} };
+var _folderMock = { getName: function () { return 'root'; }, getFoldersByName: function () { return { hasNext: function () { return false; } }; }, createFolder: function () { return _folderMock; }, createFile: function () { return { getId: function () { return 'FILE_' + Math.random().toString(36).slice(2, 10); }, setSharing: function () { return this; } }; } };
+global.DriveApp = { getFileById: function () { return { getParents: function () { return { hasNext: function () { return false; }, next: function () {} }; } }; }, getRootFolder: function () { return _folderMock; }, Access: {}, Permission: {} };
 global.UrlFetchApp = { fetch: function () { return { getResponseCode: function () { return 200; }, getContentText: function () { return '{"ok":true}'; } }; } };
 global.ScriptApp = { getService: function () { return { getUrl: function () { return 'https://script.google.com/exec'; } }; }, getProjectTriggers: function () { return []; }, newTrigger: function () { return { timeBased: function () { return this; }, everyMinutes: function () { return this; }, everyHours: function () { return this; }, create: function () {} }; } };
 global.HtmlService = { createTemplateFromFile: function () { return { evaluate: function () { return { setTitle: function () { return this; }, setXFrameOptionsMode: function () { return this; }, addMetaTag: function () { return this; } }; } }; } };
@@ -198,8 +199,9 @@ ok(pl.student && pl.student.name && pl.student.class_level, 'public lookup works
 var ps = api('public.late_submit', '', { student_id: '40002', reason: 'ตื่นสาย' });
 ok(ps.ok && ps.student_name, 'public late submit (นักเรียนบันทึกเอง)');
 try { api('public.late_submit', '', { student_id: '40002' }); ok(false, 'public late dup should block'); } catch (e) { ok(/ซ้ำ/.test(e.message), 'public late dup hard-blocked'); }
-var pv2 = api('public.leave_submit', '', { student_id: '40002', guardian_name: 'นายพ่อ ดี', reason: 'ป่วย' });
-ok(pv2.ok, 'public leave submit');
+var tinyImg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAAAAAAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AfwD/2Q==';
+var pv2 = api('public.leave_submit', '', { student_id: '40002', guardian_name: 'นายพ่อ ดี', reason: 'ป่วย', relation: 'บิดา', guardian_phone: '0891112222', photo: tinyImg });
+ok(pv2.ok, 'public leave submit (พร้อมรูปถ่ายเอง)');
 try { api('public.leave_submit', '', { student_id: '40002', guardian_name: '' }); ok(false, 'public leave needs guardian'); } catch (e) { ok(/ผู้ปกครอง/.test(e.message), 'public leave requires guardian'); }
 
 // ── NEW: board.today (เฉพาะวันนี้) ──
@@ -207,6 +209,9 @@ var bd = api('board.today', adminTok, {});
 ok(Array.isArray(bd.late) && Array.isArray(bd.leave) && bd.date, 'board.today returns lists + date');
 ok(bd.late_count >= 1 && bd.leave_count >= 1, 'board shows today records (late=' + bd.late_count + ' leave=' + bd.leave_count + ')');
 ok(bd.late.some(function (r) { return r.self === true; }), 'board marks self-reported records');
+ok(bd.late.every(function (r) { return 'sid' in r && 'advisor' in r; }), 'board late has sid + advisor');
+ok(bd.leave.every(function (r) { return 'sid' in r && 'advisor' in r && 'phone' in r && 'relation' in r && 'photo' in r; }), 'board leave has sid/advisor/phone/relation/photo');
+ok(bd.leave.some(function (r) { return r.photo && r.phone === '0891112222' && r.relation === 'บิดา'; }), 'board leave shows guardian phone/relation + photo link');
 
 // ── NEW: nav.counts (badge เมนู sidebar) ──
 var nc = api('nav.counts', adminTok, {});
@@ -224,6 +229,49 @@ ok(lateAlert.length > beforeN && lateAlert.some(function (n) { return /มาส
 
 // ── NEW: หักคะแนนสะสมข้ามเกณฑ์ 30 → แจ้งเตือน (40001 ถูกหัก 40 → คงเหลือ 60) ──
 ok(api('notify.list', adminTok, {}).items.some(function (n) { return /หักเกิน 30/.test(n.title); }), 'behavior deduct alert (เกิน 30) แจ้งเตือน');
+
+// ── NEW: หักอัตโนมัติจากมาสาย = รายการจริง + ยกเลิกมาสาย → คืนคะแนน (เคสลูกค้า: คะแนนไม่กลับ 100) ──
+api('setting.update', adminTok, { settings: { late_auto_deduct: 'yes', late_auto_threshold: '3', late_auto_points: '5' } });
+api('student.save', adminTok, { is_new: true, id: '40011', prefix: 'เด็กชาย', first_name: 'ออโต้', last_name: 'สาย', class_level: '3', room: '1', number: '11', advisor_name: 'ครูเอ' });
+var startScore = Number(api('setting.get', adminTok, {}).settings.start_score) || 100;
+api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-13' });   // จันทร์
+api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-14' });
+var autoRes = api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-15' });   // ครั้งที่ 3 ของสัปดาห์ → หักอัตโนมัติ
+ok(autoRes.auto && autoRes.auto.deducted === true && autoRes.auto.points === 5, 'มาสายครบ 3/สัปดาห์ → หักอัตโนมัติ 5 คะแนน');
+var stuAuto = api('student.lookup', adminTok, { id: '40011' }).student;
+ok(Number(stuAuto.score) === startScore - 5, 'คะแนนหลังหักอัตโนมัติ = ' + (startScore - 5));
+var autoRec = api('behavior.list', adminTok, { student_id: '40011' }).items;
+ok(autoRec.length === 1 && autoRec[0].auto === true, 'หักอัตโนมัติสร้าง "รายการหักคะแนน" จริง (เห็น/ยกเลิกได้)');
+// ยกเลิกรายการมาสายที่ทำให้ครบเกณฑ์ → รายการหักถูกยกเลิก + คะแนนกลับเต็ม
+api('late.cancel', adminTok, { id: autoRes.record.id });
+ok(Number(api('student.lookup', adminTok, { id: '40011' }).student.score) === startScore, 'ยกเลิกมาสาย → คืนคะแนนอัตโนมัติ กลับเป็น ' + startScore);
+ok(api('behavior.list', adminTok, { student_id: '40011', include_canceled: true }).items[0].canceled === true, 'รายการหักอัตโนมัติถูกยกเลิกตามรายการมาสาย');
+
+// ── NEW: ยกเลิกรายการหักคะแนนหลังชนพื้น 0 → คะแนนต้องคำนวณใหม่ให้ถูก (ไม่เพี้ยนจาก clamp) ──
+api('student.save', adminTok, { is_new: true, id: '40012', prefix: 'เด็กชาย', first_name: 'ชน', last_name: 'ศูนย์', class_level: '3', room: '1', number: '12', advisor_name: 'ครูเอ' });
+var big1 = api('behavior.save', adminTok, { student_id: '40012', kind: 'deduct', offense_name: 'หนัก1', points: 80, points_override: true });
+var big2 = api('behavior.save', adminTok, { student_id: '40012', kind: 'deduct', offense_name: 'หนัก2', points: 80, points_override: true });
+ok(big2.score_after === 0, 'หักเกินพื้น → คะแนน clamp ที่ 0');
+api('behavior.cancel', adminTok, { id: big2.record.id });
+ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === startScore - 80, 'ยกเลิกรายการที่ชน 0 → คะแนนคำนวณใหม่ถูก (' + (startScore - 80) + ') ไม่เพี้ยน');
+api('behavior.cancel', adminTok, { id: big1.record.id });
+ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === startScore, 'ยกเลิกครบทุกรายการ → คะแนนกลับเต็ม ' + startScore);
+
+// ── NEW: student.save ห้ามให้ client แก้คะแนนตรง ๆ (คะแนนมาจากรายการเท่านั้น) ──
+var sc40001 = Number(api('student.lookup', adminTok, { id: '40001' }).student.score);
+api('student.save', adminTok, { id: '40001', prefix: 'เด็กชาย', first_name: 'สมชาย', last_name: 'ใจดี', class_level: '3', room: '1', number: '1', advisor_name: 'ครูเอ', score: 5 });
+ok(Number(api('student.lookup', adminTok, { id: '40001' }).student.score) === sc40001, 'student.save ไม่ให้ payload แก้คะแนน (กัน privilege escalation)');
+
+// ── NEW: คำนวณคะแนนใหม่ทั้งระบบ (ซ่อมคะแนนที่เพี้ยน) ──
+api('student.save', adminTok, { is_new: true, id: '40013', prefix: 'เด็กหญิง', first_name: 'คะแนน', last_name: 'เพี้ยน', class_level: '3', room: '1', number: '13', advisor_name: 'ครูเอ' });
+api('behavior.save', adminTok, { student_id: '40013', kind: 'deduct', offense_name: 'ทดสอบ', points: 25, points_override: true });
+ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === startScore - 25, 'หัก 25 → ' + (startScore - 25));
+api('student.reset_scores', adminTok, {});     // ทุกคน = start → 40013 เพี้ยน (มีรายการหักค้างอยู่)
+ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === startScore, 'reset_scores → คะแนนเป็น ' + startScore + ' (ยังไม่ตรงกับรายการ)');
+var rc = api('behavior.recompute', adminTok, {});
+ok(rc.ok && rc.fixed >= 1, 'behavior.recompute ซ่อมคะแนนที่ไม่ตรง (' + rc.fixed + ' คน)');
+ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === startScore - 25, 'คะแนนถูกคำนวณกลับจากรายการจริง = ' + (startScore - 25));
+api('setting.update', adminTok, { settings: { late_auto_deduct: 'no' } });
 
 // logout
 api('auth.logout', adminTok, {});
