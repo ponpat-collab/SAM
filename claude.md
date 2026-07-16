@@ -14170,6 +14170,28 @@ LMS · school admin · water-billing · POS · CRM · คลินิก · ร�
   **Detection signature:** "ยกเลิก/ลบรายการหมดแล้ว ค่าไม่กลับไปที่ตั้งต้น" / "ค่าเกินเพดานหรือติดลบหลังยกเลิก" / "ผู้ใช้บอกว่าระบบหักจากยอดจริงไม่ใช่จากรายการ" → 99% คือ delta + clamp (และ/หรือ auto-record ที่ไม่ผูก ref)
   **เคสครอบคลุม (≥5):** คะแนนความประพฤติ (เคสนี้) · ยอดเงินคงเหลือ/กระเป๋าเงิน (ยกเลิกรายการโอน) · สต็อกสินค้า (clamp ที่ 0 แล้วยกเลิกใบเบิก) · แต้มสะสม/คูปอง (เพดานแต้ม) · วันลาคงเหลือ (ยกเลิกใบลา) · โควตาการใช้งาน · จำนวนที่นั่งว่าง (ยกเลิกจอง) · เครดิตชั่วโมงกิจกรรม — ทุกค่าที่ "เป็นผลรวมของรายการ + มีเพดาน + ยกเลิกย้อนหลังได้"
 
+- **★ Helper Method ที่ไม่มีอยู่จริง (`TH.dateTime`) — เรียกจาก generic helper ตัวใหม่ → TypeError → ทุกปุ่มที่ใช้ตัวกลางนั้น "ตายเงียบ" พร้อมกัน (syntax check + audit เดิมจับไม่ได้)**
+  **เคสจริง (SAM · 2026-07-16 · ลูกค้าเจอทันทีหลัง deploy):** เขียน `A.printDoc()` เป็นตัวกลางของทุกปุ่มพิมพ์ · ข้างในเรียก `TH.dateTime(new Date())` และปุ่มกระดานเรียก `TH.dateLongWeekday(new Date())` — **แต่ TH module ของระบบนี้มีแค่ `date/dateLong/dateWeekday/time/smart`** (ไม่มี `dateTime`/`dateLongWeekday` — ชื่อพวกนั้นมาจาก TH module ของ *ระบบอื่น* ที่เขียนไว้ใน claude.md) → `TH.dateTime is not a function` → `A.printDoc` throw ตั้งแต่บรรทัดสร้าง HTML → **ปุ่มพิมพ์ทุกหน้าตายพร้อมกัน** ("ปุ่มรายงานรายบุคคล ปกติแสดงผล ตอนนี้ไม่แสดงแล้ว") · ที่ร้ายคือ **ก่อน refactor มันทำงานอยู่** — การรวมเป็นตัวกลางเดียวทำให้บั๊กจุดเดียวล้มทุกปุ่ม
+  **สาเหตุระดับลึก:** JS เป็น dynamic — `TH.dateTime(...)` เป็น **member access ที่ syntax ถูกเสมอ** · `node --check` / `new Function` / audit ทุกด่านเดิมผ่านหมด · error โผล่เฉพาะ **runtime ตอนกดปุ่ม** · ยิ่ง helper อยู่คนละ module (TH นิยามใน ScriptsCore · ผู้เรียกอยู่ ScriptsPages*) ยิ่งไม่มีอะไรเช็คให้ · เป็นตระกูลเดียวกับ "Cross-IIFE Public Surface" (`SD.xxx` ที่ลืม expose) แต่ **หนักกว่า** เพราะ object มีอยู่จริง (TH) แค่ **method ไม่มี** → ไม่มีสัญญาณใด ๆ เลย
+  **เหตุผลที่ debug ยาก:** (1) ตัวกลางเพิ่ง refactor → เข้าใจผิดว่าเป็นเรื่อง CSS/print/permission · (2) ปุ่มไม่มี visual feedback ตอน throw (ถ้าไม่ได้ห่อ runBtn) → "กดแล้วเงียบ" · (3) มีปุ่มพิมพ์ 6 จุดพังพร้อมกัน → ดูเหมือน "ระบบพิมพ์พัง" ไม่ใช่ "พิมพ์ผิด 1 บรรทัด" · (4) ชื่อ method ที่ผิด **มีอยู่จริงในระบบอื่น/ในเอกสาร** → อ่านโค้ดแล้วดูสมเหตุผล 100%
+  **ทางแก้ที่ผิด:** ห่อ try/catch รอบ printDoc (พิมพ์ได้แต่ข้อมูลหาย) · เพิ่ม `TH.dateTime` ใหม่เพื่อให้โค้ดผ่าน (module บวมด้วย method ซ้ำซ้อน `date`+`time` ที่มีอยู่แล้ว) · เดาว่าเป็น CSS
+  **ทางแก้ที่ถูก:** ใช้ method ที่ module **มีจริง** (`TH.date(d) + ' ' + TH.time(d)`, `TH.dateWeekday(d)`) + **เพิ่ม audit gate ตรวจ contract ของ helper**:
+  ```bash
+  # ทุก TH.* / fmt.* ที่ "ถูกอ่าน" ต้องมีนิยาม (ใน object literal หรือ TH.x = ...)
+  node -e 'var fs=require("fs");var src=["ScriptsCore.html","ScriptsPages.html","ScriptsPages2.html"]
+    .map(function(f){return fs.readFileSync(f,"utf8")}).join("\n");
+  function defined(o){var m=src.match(new RegExp("var "+o+" = \\{([\\s\\S]*?)\\n  \\};")),set=new Set(),mm;
+    if(m){var r=/^\s{4}([A-Za-z_]\w*)\s*:/gm;while((mm=r.exec(m[1])))set.add(mm[1]);}
+    var r2=new RegExp("\\b"+o+"\\.([A-Za-z_]\\w*)\\s*=","g"),m2;while((m2=r2.exec(src)))set.add(m2[1]);return set;}
+  var bad=[];["TH","fmt"].forEach(function(o){var def=defined(o),used={},m,re=new RegExp("\\b"+o+"\\.([A-Za-z_]\\w*)","g");
+    while((m=re.exec(src))){if(src.substr(m.index+m[0].length,2).trim()[0]==="=")continue;used[m[1]]=1;}
+    Object.keys(used).forEach(function(k){if(!def.has(k))bad.push(o+"."+k)});});
+  if(bad.length){console.log("✗ เรียกแต่ไม่มีนิยาม: "+bad.join(", "));process.exit(2)}'
+  ```
+  **กฎเหล็ก:** (ก) เขียน helper/ตัวกลางใหม่ที่เรียก module อื่น (`TH.*` · `fmt.*` · `A.*` · `Store.*`) — **เปิดดูนิยามจริงของ module นั้นก่อนเสมอ ห้ามเดาชื่อ method จากความจำหรือจากระบบอื่น** (TH module ของแต่ละระบบมี method ไม่เท่ากัน แม้ชื่อ module เหมือนกัน) · (ข) **ทุก object-contract ที่ข้าม module ต้องมี audit gate เทียบ read↔define** (เหมือน `SD.xxx` cross-IIFE) — ไม่ใช่แค่ `A.*` · (ค) ตัวกลางที่ปุ่มหลายจุดใช้ร่วม = **single point of failure** → หลัง refactor ต้อง **กดทดสอบทุกปุ่มที่เรียกมัน** ไม่ใช่แค่ปุ่มเดียว
+  **Detection signature:** "ปุ่มที่เคยทำงาน หยุดทำงานพร้อมกันหลาย ๆ จุด ทันทีหลัง refactor เป็นตัวกลางเดียว · ไม่มี error บนจอ" → เปิด DevTools console จะเห็น `X.yyy is not a function` → ตรวจว่า method นั้นมีจริงใน module หรือไม่ (`grep -n "yyy: function" ไฟล์ที่นิยาม`)
+  **เคสครอบคลุม (≥5):** `TH.dateTime` ที่ไม่มีในระบบนี้ (เคสนี้) · `fmt.money`/`fmt.currency` ที่มีแต่ในระบบอื่น · `A.svgBar` vs `A.svgHBar` (ชื่อใกล้กัน) · `Store.settings` vs `Store.boot.settings` · `Modal.show` vs `Modal.open` · `Spinner.start` vs `Spinner.show` · ทุกครั้งที่ **ก๊อป pattern จากเอกสาร/ระบบอื่น** มาใช้โดยไม่เช็คว่า helper ปลายทางมี method นั้นจริง
+
 - **Form Reset ตกหล่น `<select>` + visibility state → "สมัครแล้วฟอร์มไม่ล้าง" (ทั้งที่ input/textarea ล้างแล้ว)**
   เคสจริง (TLC · 2026-06-12): หน้าสมัครแข่งขัน กดบันทึกสำเร็จ → success handler ล้าง `$$('#page input, #page textarea').forEach(el=>el.value='')` แต่<b>ไม่ล้าง `<select>`</b> (กิจกรรม/โรงเรียน) + ไม่รีเซ็ต visibility ของ team-wrap/coach-wrap + ไม่รีเซ็ต label dynamic → dropdown ค้างค่าเดิม → ผู้ใช้เห็นว่า "ไม่ล้างฟอร์ม" (เพราะ dropdown เป็นจุดที่เด่นที่สุด)
   **สาเหตุ:** selector `#page input, #page textarea` ไม่ครอบ `<select>` · และ form ที่มี conditional fields (team-wrap แสดงเมื่อ team_size>1 · coach-wrap แสดงเมื่อ require_coach) มี<b>visual state</b>ที่ต้อง reset ด้วย ไม่ใช่แค่ value

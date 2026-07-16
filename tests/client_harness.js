@@ -94,9 +94,38 @@ setTimeout(function () {
           win.SAM.dispatch();
           setTimeout(function () {
             ok(!!doc.querySelector('[data-set="org_name"]') || !!doc.querySelector('#set-form'), 'settings page rendered');
-            console.log('════════════════════════════════════════');
-            console.log((fail === 0 ? '✅' : '❌') + ' CLIENT PASS ' + pass + ' / FAIL ' + fail);
-            process.exit(fail === 0 ? 0 : 1);
+
+            // ── A.printDoc ต้องสร้างเอกสารจริง (เคสจริง: TH.dateTime ไม่มี → ปุ่มพิมพ์ตายเงียบทุกจุด) ──
+            var printed = 0; win.print = function () { printed++; };
+            try {
+              win.SAM.printDoc({
+                title: 'ทดสอบพิมพ์', sub: 'ช่วงทดสอบ', summary: '<b>สรุป</b>',
+                html: win.SAM.prTable([{ label: 'คอลัมน์', k: 'a' }], [{ a: 'ค่า1' }])
+              });
+              var pd = doc.querySelector('.pr-only');
+              ok(!!pd, 'printDoc สร้างเอกสาร .pr-only');
+              ok(printed === 1, 'printDoc เรียก window.print()');
+              ok(doc.body.classList.contains('prt-on'), 'printDoc ใส่ body.prt-on (CSS ซ่อนแอปเฉพาะตอนพิมพ์)');
+              ok(/ทดสอบพิมพ์/.test(pd.innerHTML) && /ค่า1/.test(pd.innerHTML), 'เอกสารมีหัวเรื่อง + ข้อมูลตาราง');
+            } catch (e) { ok(false, 'printDoc ทำงานได้: ' + e.message); }
+
+            // ปุ่มพิมพ์ในหน้ารายงานรายบุคคลต้องกดแล้วได้เอกสารจริง
+            win.location.hash = '#/report/student?id=30001';
+            win.SAM.dispatch();
+            setTimeout(function () {
+              var btn = doc.querySelector('#sr-print');
+              ok(!!btn, 'หน้ารายงานรายบุคคลมีปุ่มพิมพ์');
+              if (btn) {
+                var before = printed;
+                var oldDoc = doc.querySelector('.pr-only'); if (oldDoc) oldDoc.remove();
+                try { btn.click(); } catch (e) {}
+                ok(printed === before + 1 && !!doc.querySelector('.pr-only'), 'กดปุ่มพิมพ์รายงานรายบุคคล → สร้างเอกสาร + สั่งพิมพ์จริง');
+              }
+              console.log('════════════════════════════════════════');
+              console.log((fail === 0 ? '✅' : '❌') + ' CLIENT PASS ' + pass + ' / FAIL ' + fail);
+              process.exit(fail === 0 ? 0 : 1);
+            }, 200);
+            return;
           }, 60);
         }, 60);
       }, 60);

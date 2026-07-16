@@ -1025,8 +1025,7 @@ button{font-family:inherit}
     doc.innerHTML = '<div class="pr-doc">' +
       '<div class="pr-title"><h2>' + esc(opts.title || 'รายงาน') + '</h2>' +
         '<div class="sub">' + esc(s.org_name || app.name || '') + (s.academic_year ? ' · ปีการศึกษา ' + esc(s.academic_year) : '') + '</div></div>' +
-      (opts.sub ? '<div class="pr-meta"><span>' + esc(opts.sub) + '</span><span>พิมพ์เมื่อ ' + TH.dateTime(new Date()) + '</span></div>'
-                : '<div class="pr-meta"><span></span><span>พิมพ์เมื่อ ' + TH.dateTime(new Date()) + '</span></div>') +
+      '<div class="pr-meta"><span>' + esc(opts.sub || '') + '</span><span>พิมพ์เมื่อ ' + TH.date(new Date()) + ' ' + TH.time(new Date()) + '</span></div>' +
       (opts.summary ? '<div class="pr-sum">' + opts.summary + '</div>' : '') +
       (opts.html || '') +
       (opts.signatures === false ? '' : '<div class="pr-sign"><div class="s"><div class="line"></div>ครูที่ปรึกษา</div><div class="s"><div class="line"></div>หัวหน้าฝ่ายปกครอง</div><div class="s"><div class="line"></div>ผู้อำนวยการ</div></div>') +
@@ -1804,7 +1803,7 @@ button{font-family:inherit}
         return call('board.today', {}).then(function (d) {
           if (!d.late.length && !d.leave.length) { toast('วันนี้ยังไม่มีรายการ', 'warning'); return; }
           A.printDoc({
-            title: 'สรุปมาสาย / ขอกลับบ้าน ประจำวัน', sub: TH.dateLongWeekday(new Date()),
+            title: 'สรุปมาสาย / ขอกลับบ้าน ประจำวัน', sub: TH.dateWeekday(new Date()),
             summary: '<b>สรุป:</b> มาสาย ' + d.late_count + ' คน · ขอกลับบ้าน ' + d.leave_count + ' คน',
             html: '<h3 style="font-family:Kanit;font-size:13pt;margin:10px 0 6px">มาสายวันนี้ (' + d.late_count + ')</h3>' +
               A.prTable([
@@ -2722,6 +2721,6 @@ button{font-family:inherit}
 })();
 </script>
 
-  <!-- build:2026-07-16T06:20:46.410Z -->
+  <!-- build:2026-07-16T07:21:25.211Z -->
 </body>
 </html>

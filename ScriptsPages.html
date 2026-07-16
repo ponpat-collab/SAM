@@ -98,7 +98,7 @@
         return call('board.today', {}).then(function (d) {
           if (!d.late.length && !d.leave.length) { toast('วันนี้ยังไม่มีรายการ', 'warning'); return; }
           A.printDoc({
-            title: 'สรุปมาสาย / ขอกลับบ้าน ประจำวัน', sub: TH.dateLongWeekday(new Date()),
+            title: 'สรุปมาสาย / ขอกลับบ้าน ประจำวัน', sub: TH.dateWeekday(new Date()),
             summary: '<b>สรุป:</b> มาสาย ' + d.late_count + ' คน · ขอกลับบ้าน ' + d.leave_count + ' คน',
             html: '<h3 style="font-family:Kanit;font-size:13pt;margin:10px 0 6px">มาสายวันนี้ (' + d.late_count + ')</h3>' +
               A.prTable([

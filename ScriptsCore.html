@@ -243,8 +243,7 @@
     doc.innerHTML = '<div class="pr-doc">' +
       '<div class="pr-title"><h2>' + esc(opts.title || 'รายงาน') + '</h2>' +
         '<div class="sub">' + esc(s.org_name || app.name || '') + (s.academic_year ? ' · ปีการศึกษา ' + esc(s.academic_year) : '') + '</div></div>' +
-      (opts.sub ? '<div class="pr-meta"><span>' + esc(opts.sub) + '</span><span>พิมพ์เมื่อ ' + TH.dateTime(new Date()) + '</span></div>'
-                : '<div class="pr-meta"><span></span><span>พิมพ์เมื่อ ' + TH.dateTime(new Date()) + '</span></div>') +
+      '<div class="pr-meta"><span>' + esc(opts.sub || '') + '</span><span>พิมพ์เมื่อ ' + TH.date(new Date()) + ' ' + TH.time(new Date()) + '</span></div>' +
       (opts.summary ? '<div class="pr-sum">' + opts.summary + '</div>' : '') +
       (opts.html || '') +
       (opts.signatures === false ? '' : '<div class="pr-sign"><div class="s"><div class="line"></div>ครูที่ปรึกษา</div><div class="s"><div class="line"></div>หัวหน้าฝ่ายปกครอง</div><div class="s"><div class="line"></div>ผู้อำนวยการ</div></div>') +

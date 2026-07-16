@@ -377,6 +377,29 @@ if ls tests/*scope*regression* tests/*regression*scope* >/dev/null 2>&1 || grep 
   echo "  ✓ มี scope-regression test (ครู A ไม่เห็นห้อง B + งานค้างกรองรอบเวลา)"
 else echo "  ⚠ ยังไม่มี regression test สำหรับ aggregation-scope (S7) / year-window (S8) — ควรเพิ่ม"; fi
 
+# ── 34) helper method ที่เรียกต้องมีนิยามจริง (TH.* / fmt.*) ──
+# เรียก method ที่ไม่มี → TypeError ตอน runtime → ปุ่มตายเงียบ (syntax check จับไม่ได้ เพราะ member access ถูก syntax)
+echo "─34) helper contract (TH.* / fmt.* ที่เรียก ต้องมีนิยาม)"
+node -e '
+var fs=require("fs");
+var src=["ScriptsCore.html","ScriptsPages.html","ScriptsPages2.html"].map(function(f){return fs.readFileSync(f,"utf8");}).join("\n");
+function defined(o){
+  var m=src.match(new RegExp("var "+o+" = \\{([\\s\\S]*?)\\n  \\};")), set=new Set(), mm;
+  if(m){ var r=/^\s{4}([A-Za-z_]\w*)\s*:/gm; while((mm=r.exec(m[1]))) set.add(mm[1]); }
+  var r2=new RegExp("\\b"+o+"\\.([A-Za-z_]\\w*)\\s*=","g"), m2;
+  while((m2=r2.exec(src))) set.add(m2[1]);
+  return set;
+}
+var bad=[];
+["TH","fmt"].forEach(function(o){
+  var def=defined(o), used={}, m, re=new RegExp("\\b"+o+"\\.([A-Za-z_]\\w*)","g");
+  while((m=re.exec(src))){ if(src.substr(m.index+m[0].length,2).trim()[0]==="=") continue; used[m[1]]=1; }
+  Object.keys(used).forEach(function(k){ if(!def.has(k)) bad.push(o+"."+k); });
+});
+if(bad.length){ console.log("  ✗ เรียกแต่ไม่มีนิยาม: "+bad.join(", ")); process.exit(2); }
+console.log("  ✓ ทุก TH.*/fmt.* ที่เรียกมีนิยามครบ");
+' || FAIL=1
+
 echo "════════════════════════════════════════"
 if [ $FAIL -eq 0 ]; then
   echo "✅ AUDIT ผ่านครบทุกด่าน — พร้อม deploy"
