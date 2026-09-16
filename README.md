@@ -71,7 +71,7 @@ Google Apps Script (V8) · Google Sheets (Sheet-as-DB · แคช 3 ชั้�
 
 ## 📦 Deploy (สำหรับผู้พัฒนา)
 
-- Version: **1.0.0** · Last deploy: **2026-07-13**
+- Version: **1.1.0** · Last update: **2026-09-16** (คะแนนมาสายแยกก้อน · คะแนนความประพฤติสะสมเริ่ม 0 · ค้นหาล็อก 5 หลัก)
 - Script ID: `1VkZNuKayu7SY6U8iPPMfDdh6SVYtnOJrnJS0clslSlly2022aypgDDv1`
 - Deployment ID: `AKfycbwHPVbFjqNnFnodwdXpxnZvpHREkzN6br3PZQZNq9BwHFutv-e7-kQt68pYe9nGGoU7`
 

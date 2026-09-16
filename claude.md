@@ -15938,3 +15938,16 @@ for tf in tests/*.js; do node "$tf" || exit 1; done
   **ทางแก้:** `maxlength` + strip non-digit + auto เมื่อ `length === 5` พอดี (debounce สั้นลง 250ms) + Enter/submit ตอนยังไม่ครบ → toast แทนการค้น · validation ฝั่ง server บังคับ 5 หลักตอนเพิ่ม/นำเข้าให้สอดคล้อง (เดิมรับ 4-6 → ค้นไม่ได้)
   **กฎเหล็ก:** รหัสที่มี **ความยาวตายตัว** → auto-trigger ที่ `=== N` เท่านั้น + `maxlength=N` + `inputmode=numeric` · validation สร้าง/นำเข้าต้องใช้ความยาวเดียวกับที่ช่องค้นหายอมรับ (ไม่งั้นมี entity ที่ค้นไม่เจอ)
   **เคสครอบคลุม:** รหัสนักเรียน · เลขบัตร 13 หลัก · OTP 6 หลัก · บาร์โค้ด EAN-13 · รหัสพนักงาน · เลขห้อง
+
+- **Callback ที่ caller ส่งอาร์กิวเมนต์ให้ แต่ callback ประกาศไม่รับ → อ้างตัวแปรที่ "ดูเหมือนมี" แล้ว ReferenceError ตอน render (ฟอร์มไม่เปิด)**
+  **เคสจริง (SAM v1.1.0 · จับได้จาก client harness ก่อน deploy):** `scanShell({ body: function () { return ... + lateRuleHint(d) + ... } })` · `renderPreview` เรียก `cfg.body(d)` ส่ง `d` มาให้ แต่ `body` ประกาศ `function ()` ไม่มีพารามิเตอร์ → `d` ไม่มีใน scope → `ReferenceError: d is not defined` → `.catch` ของ lookup แสดงเป็น toast "d is not defined" · ฟอร์มมาสายไม่เปิดเลย
+  **สาเหตุระดับลึก:** callback 3 ตัวใน config เดียวกัน (`body` · `wire(pv, d)`) มีลายเซ็นไม่เท่ากัน · ตัวเดิมไม่ต้องใช้ `d` จึงเขียน `function ()` · พอเพิ่มบรรทัดที่ใช้ `d` ในภายหลัง ไม่มีอะไรเตือน (`new Function`/`node --check` ผ่าน · `d` ไม่ใช่ syntax error)
+  **ทางแก้:** ประกาศพารามิเตอร์ให้ตรงกับที่ caller ส่งเสมอ (`body: function (d)`) · เทสต์ที่ **render ฟอร์มจริงหลัง lookup** แล้ว assert element ที่ขึ้นกับ `d` (ช่องเวลา · กล่องกติกา) — แค่ assert หน้า route ขึ้นไม่พอ
+  **กฎเหล็ก:** แก้ callback ให้ใช้ตัวแปรใหม่ → ตรวจลายเซ็นของ callback นั้นทุกครั้ง · config-object ที่มีหลาย callback ควรประกาศพารามิเตอร์ครบตาม contract ของ caller ตั้งแต่แรก (แม้ยังไม่ใช้)
+  **Detection signature:** toast/error "X is not defined" ตอนเปิดฟอร์ม/modal ที่ render จาก config callback · ตัวแปร X มีอยู่ในฟังก์ชันพี่น้อง (`wire`) ของ config เดียวกัน
+  **เคสครอบคลุม (≥5):** `body/wire` ของ scan shell (เคสนี้) · `render(row)` ของ table config · `onOpen(host)` ของ modal · `fmt(r)` ของ prTable column · `validate(data)` ของ wizard step · `map(item, i)` ที่เขียน `function (item)` แล้วใช้ `i`
+
+- **Client test ที่ "ผ่านเพราะ guard ชั้นที่สอง" — mutation ลบเงื่อนไข trigger (`=== 5` → `>= 4`) แล้วเทสต์ยังเขียว**
+  **เคสจริง (SAM v1.1.0):** ค้นหาอัตโนมัติมี 2 ชั้น (input trigger `length === 5` + `go()` ตรวจ `/^\d{5}$/`) · เทสต์ assert แค่ "ไม่เกิด lookup ตอนพิมพ์ 4 หลัก" → ถอดชั้นแรกทิ้งแล้วชั้นสองยังกันไว้ → เทสต์ผ่าน ทั้งที่ผู้ใช้จะเห็น toast เตือนเด้งเองทุกครั้งที่หยุดพิมพ์กลางคัน
+  **ทางแก้:** assert **ผลข้างเคียงเฉพาะของชั้นแรก** ด้วย — "พิมพ์ 4 หลักแล้วหยุด ต้องไม่มี toast เตือน" · ล้าง toast ค้างจากเทสต์ก่อนหน้าก่อน assert
+  **กฎเหล็ก:** ทุก guard ที่มี defense-in-depth ต้องมีเทสต์อย่างน้อย 1 ข้อที่ **ชั้นอื่นกันแทนไม่ได้** · รัน mutation ทีละชั้นเสมอ ห้ามสรุปจาก "เทสต์ผ่าน"

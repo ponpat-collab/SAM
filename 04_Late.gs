@@ -27,11 +27,8 @@ function _lateTable_(map) {
 }
 function _lateDeductAt_(n, cfg) { return n <= cfg.table.length ? cfg.table[n - 1] : cfg.after; }
 
-// คำนวณคะแนนมาสายของนักเรียน 1 คน "จากรายการเสมอ" (ไม่บวก/ลบสะสม — ยกเลิกรายการแล้วลำดับขยับเอง)
-// คืน { count (ทุกครั้งใน term), counted (ครั้งที่หลังเวลาตัด), score, per: {lateId: {rank, deduct}} }
-function _lateScoreDetail_(sid, map) {
-  var key = _termKey_(map), cutoff = cfg_time_(map.late_cutoff_time) || '08:35', cfg = _lateTable_(map);
-  var rows = DB_byLite(SHEETS.LATE, 'student_id', String(sid)).filter(function (r) { return !_yes_(r.canceled) && _lateInTerm_(r, key); });
+// จัดอันดับรายการมาสายของ "นักเรียน 1 คน" (rows = รายการใน term ที่ยังไม่ยกเลิก) — ใช้ร่วมทุกที่ (single source ของกติกา)
+function _lateRank_(rows, cutoff, cfg) {
   rows.sort(function (a, b) { return (cfg_d10_(a.date) + _lateArrive_(a)).localeCompare(cfg_d10_(b.date) + _lateArrive_(b)); });
   var per = {}, rank = 0, score = 0;
   rows.forEach(function (r) {
@@ -39,6 +36,28 @@ function _lateScoreDetail_(sid, map) {
     else per[r.id] = { rank: 0, deduct: 0 };
   });
   return { count: rows.length, counted: rank, score: score, per: per, next: _lateDeductAt_(rank + 1, cfg) };
+}
+function _lateCtx_(map) { return { key: _termKey_(map), cutoff: cfg_time_(map.late_cutoff_time) || '08:35', cfg: _lateTable_(map) }; }
+// คำนวณคะแนนมาสายของนักเรียน 1 คน "จากรายการเสมอ" (ไม่บวก/ลบสะสม — ยกเลิกรายการแล้วลำดับขยับเอง)
+// คืน { count (ทุกครั้งใน term), counted (ครั้งที่หลังเวลาตัด), score, per: {lateId: {rank, deduct}}, next }
+function _lateScoreDetail_(sid, map) {
+  var c = _lateCtx_(map);
+  var rows = DB_byLite(SHEETS.LATE, 'student_id', String(sid)).filter(function (r) { return !_yes_(r.canceled) && _lateInTerm_(r, c.key); });
+  return _lateRank_(rows, c.cutoff, c.cfg);
+}
+// หลายคนพร้อมกัน — scan ชีตมาสาย "ครั้งเดียว" แล้วจัดกลุ่ม (กัน multi-scan ใน list/recompute)
+// sidSet = {sid:1} หรือ null (= ทุกคน) · คืน {sid: detail}
+function _lateScoreDetailMany_(sidSet, map) {
+  var c = _lateCtx_(map), groups = {};
+  DB_readLite(SHEETS.LATE).forEach(function (r) {
+    var k = String(r.student_id);
+    if (sidSet && !sidSet[k]) return;
+    if (_yes_(r.canceled) || !_lateInTerm_(r, c.key)) return;
+    (groups[k] = groups[k] || []).push(r);
+  });
+  var out = {};
+  Object.keys(groups).forEach(function (k) { out[k] = _lateRank_(groups[k], c.cutoff, c.cfg); });
+  return out;
 }
 // เรียกภายใน DB_withLock_ — เขียน late_score ลง Students ให้ตรงกับรายการ
 function _recomputeLateScore_(sid, map) {
@@ -133,13 +152,10 @@ function Late_list(user, p) {
   rows.sort(function (a, b) { return (cfg_d10_(b.date) + b.time).localeCompare(cfg_d10_(a.date) + a.time); });
   var total = rows.length, start = (page - 1) * per;
   var slice = rows.slice(start, start + per);
-  // ยอดหักต่อรายการ — คำนวณเฉพาะนักเรียนที่อยู่ในหน้านี้ (memo ต่อคน · ไม่ N+1 ทั้งตาราง)
-  var detailMemo = {};
-  function perOf(r) {
-    var k = String(r.student_id);
-    if (!detailMemo[k]) detailMemo[k] = _lateScoreDetail_(k, map).per;
-    return detailMemo[k][r.id] || { rank: 0, deduct: 0 };
-  }
+  // ยอดหักต่อรายการ — scan ครั้งเดียวสำหรับนักเรียนทุกคนในหน้านี้ (ไม่ scan ต่อคน)
+  var sidSet = {}; slice.forEach(function (r) { sidSet[String(r.student_id)] = 1; });
+  var details = _lateScoreDetailMany_(sidSet, map);
+  function perOf(r) { var d = details[String(r.student_id)]; return (d && d.per[r.id]) || { rank: 0, deduct: 0 }; }
   var items = slice.map(function (r) {
     var s = stuIx[String(r.student_id)], d = perOf(r);
     return { id: r.id, date: cfg_d10_(r.date), time: r.time, arrive_time: _lateArrive_(r), student_id: r.student_id, name: s ? _stuName_(s) : '(ไม่พบ)',
@@ -167,24 +183,12 @@ function Late_cancel(user, p) {
 // คำนวณคะแนนมาสายใหม่ทั้งระบบ (single scan + batch) — ใช้หลังเปลี่ยนภาคเรียน/ตาราง/เวลาตัด หรือซ่อมข้อมูล
 function Late_recomputeAll_(map) {
   map = map || Settings_map_();
-  var key = _termKey_(map), cutoff = cfg_time_(map.late_cutoff_time) || '08:35', cfg = _lateTable_(map);
-  var byStu = {};
-  DB_readLite(SHEETS.LATE).forEach(function (r) {
-    if (_yes_(r.canceled) || !_lateInTerm_(r, key)) return;
-    var k = String(r.student_id); (byStu[k] = byStu[k] || []).push(r);
-  });
-  var scores = {};
-  Object.keys(byStu).forEach(function (k) {
-    var rows = byStu[k].sort(function (a, b) { return (cfg_d10_(a.date) + _lateArrive_(a)).localeCompare(cfg_d10_(b.date) + _lateArrive_(b)); });
-    var rank = 0, sum = 0;
-    rows.forEach(function (r) { if (_lateArrive_(r) > cutoff) { rank++; sum += _lateDeductAt_(rank, cfg); } });
-    scores[k] = sum;
-  });
+  var details = _lateScoreDetailMany_(null, map);
   var stus = DB_readLite(SHEETS.STUDENTS), fixed = 0;
   DB_beginBatch();
   try {
     stus.forEach(function (s) {
-      var want = scores[String(s.id)] || 0;
+      var d = details[String(s.id)], want = d ? d.score : 0;
       if (cfg_num_(s.late_score) !== want) { DB_update(SHEETS.STUDENTS, s.id, { late_score: want }); fixed++; }
     });
   } finally { DB_endBatch(); }

@@ -331,6 +331,12 @@ api('student.reset_scores', adminTok, {});     // ทุกคน = 0 → 40013 
 ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === 0 && Number(api('student.lookup', adminTok, { id: '40011' }).student.late_score) === 0, 'reset_scores → ความประพฤติ + มาสาย = 0');
 // จำลอง AUTO record ของ v1.0.x (หักจากมาสายในก้อนความประพฤติ) — ต้องไม่ถูกนับซ้ำ
 DB_insert(SHEETS.BEHAVIOR, { id: 'BAUTO1', date: '2026-07-01', time: '08:00', student_id: '40013', kind: 'deduct', offense_code: 'AUTO', offense_name: 'มาสายเกินกำหนด', category: 'การมาเรียน', detail: '', points: -5, score_after: 0, photo_url: '', created_by: 'x', created_by_name: 'x', canceled: 'no', ref_id: 'L0' });
+// ★ ก่อนมีใครกด recompute (สภาพจริงหลัง deploy) — AUTO เก่าต้องไม่ถูกนับใน save/cancel ปกติ
+var withAuto = api('behavior.save', adminTok, { student_id: '40013', kind: 'deduct', offense_name: 'ทดสอบ2', points: 5, points_override: true });
+ok(withAuto.score_after === 30, 'AUTO เก่าค้างอยู่ → save ปกติยังไม่นับ AUTO (25+5 = 30 ไม่ใช่ 35)');
+api('behavior.cancel', adminTok, { id: withAuto.record.id });
+ok(Number(DB_get(SHEETS.STUDENTS, '40013').score) === 25, '★★ cancel ก็ไม่นับ AUTO (DB = 25)');
+api('student.reset_scores', adminTok, {});     // ทำให้เพี้ยนอีกครั้ง เพื่อให้ recompute มีงานซ่อมจริง
 var rc = api('behavior.recompute', adminTok, {});
 ok(rc.ok && rc.fixed >= 1 && rc.auto_retired === 1, 'behavior.recompute ซ่อมคะแนน (' + rc.fixed + ' คน) + ยกเลิก AUTO เก่า 1 รายการ');
 ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === 25, 'สะสมคำนวณกลับจากรายการจริง = 25 (ไม่นับ AUTO)');

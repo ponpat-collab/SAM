@@ -251,7 +251,7 @@
     var reasons = listSetting('late_reasons');
     scanShell({
       kind: 'late', icon: 'clock-history', pill: 'บันทึกการมาสาย', title: 'บันทึกมาสาย', sub: 'ยิงบาร์โค้ดหรือพิมพ์รหัสนักเรียน · ระบบบันทึกเวลาและผู้บันทึกอัตโนมัติ', reasons: reasons,
-      body: function () {
+      body: function (d) {
         return '<div class="md-section"><div class="st"><i class="bi bi-list-check"></i> เลือกสาเหตุที่มาสาย</div>' + reasonGrid(reasons, SCAN.reason) + '</div>' +
           '<div class="grid-2" style="gap:12px"><div class="field"><label>เวลาที่มาถึง <span class="req">*</span></label><input class="input" type="time" id="late-arrive" value="' + esc(TH.time(new Date()).slice(0, 5)) + '"></div>' +
           '<div class="field"><label>หมายเหตุ (ถ้ามี)</label><input class="input" id="late-note" placeholder="รายละเอียดเพิ่มเติม"></div></div>' +
