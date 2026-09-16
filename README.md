@@ -72,12 +72,15 @@ Google Apps Script (V8) · Google Sheets (Sheet-as-DB · แคช 3 ชั้�
 ## 📦 Deploy (สำหรับผู้พัฒนา)
 
 - Version: **1.1.0** · Last update: **2026-09-16** (คะแนนมาสายแยกก้อน · คะแนนความประพฤติสะสมเริ่ม 0 · ค้นหาล็อก 5 หลัก)
+- **อัปเกรดจาก v1.0.x ไม่ต้องทำอะไรเพิ่ม:** request แรกหลัง deploy ย้ายข้อมูลให้เองครั้งเดียว (`16_Migrate.gs`) — ตั้งเกณฑ์เตือนเป็น 40/60/80/100 · ยกเลิกรายการหักอัตโนมัติ (AUTO) เดิม · คำนวณคะแนนความประพฤติ/มาสายใหม่จากรายการจริง · บันทึกใน audit (`migrate.v110`)
+- **ล้างข้อมูลตัวอย่าง** ลบเฉพาะรหัส **30000–30095** พร้อมประวัติมาสาย/ลากลับ/หักคะแนนของรหัสเหล่านั้น (รหัสจริงอื่นไม่ถูกแตะ)
 - Script ID: `1VkZNuKayu7SY6U8iPPMfDdh6SVYtnOJrnJS0clslSlly2022aypgDDv1`
 - Deployment ID: `AKfycbwHPVbFjqNnFnodwdXpxnZvpHREkzN6br3PZQZNq9BwHFutv-e7-kQt68pYe9nGGoU7`
 
 ```bash
-bash _audit.sh                 # 33 ด่าน ต้องผ่านก่อน push ทุกครั้ง
-node tests/harness.js          # 39 e2e tests
+bash _audit.sh                 # 37 ด่าน ต้องผ่านก่อน push ทุกครั้ง
+node tests/harness.js          # 112 e2e tests (รวมย้ายข้อมูล v1.0.x + บันทึกพร้อมกัน)
+node tests/client_harness.js   # 43 jsdom tests
 clasp push -f
 clasp deploy -i AKfycbwHPVbFjqNnFnodwdXpxnZvpHREkzN6br3PZQZNq9BwHFutv-e7-kQt68pYe9nGGoU7 --description "vX.Y.Z"
 ```

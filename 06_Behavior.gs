@@ -117,6 +117,7 @@ function Behavior_save(user, p) {
   var date = cfg_dateOnly_((p && p.date) || new Date()) || cfg_today_();
   var map = Settings_map_(), signed = kind === 'add' ? pts : -pts, rec, scoreAfter, scoreBefore, alert;
   DB_withLock_(function () {
+    _freshVer_();                                                  // เห็นรายการที่ execution อื่นเพิ่งเขียน
     var fresh = DB_getFresh(SHEETS.STUDENTS, sid);
     if (!fresh) throw new Error('ไม่พบนักเรียน');
     var sum = _behaviorSum_(sid);                                  // รายการที่ยังไม่ยกเลิก (ยังไม่รวมรายการนี้)
@@ -156,13 +157,11 @@ function _behaviorDeductAlert_(stu, scoreAfter, scoreBefore, map) {
 }
 
 // ยกเลิกรายการหักอัตโนมัติ (AUTO) ที่เหลือจาก v1.0.x — คะแนนมาสายแยกก้อนแล้ว ห้ามนับซ้ำในความประพฤติ
+// ★ เรียกภายใน DB_withLock_ · เขียนคอลัมน์ canceled ครั้งเดียว (ไม่ DB_update ทีละรายการ)
 function Behavior_retireAuto_() {
-  var autos = DB_readLite(SHEETS.BEHAVIOR).filter(function (r) { return String(r.offense_code || '') === 'AUTO' && !_yes_(r.canceled); });
-  if (!autos.length) return 0;
-  DB_beginBatch();
-  try { autos.forEach(function (a) { DB_update(SHEETS.BEHAVIOR, a.id, { canceled: 'yes' }); }); }
-  finally { DB_endBatch(); }
-  return autos.length;
+  var want = {};
+  DB_readLite(SHEETS.BEHAVIOR).forEach(function (r) { if (String(r.offense_code || '') === 'AUTO' && !_yes_(r.canceled)) want[String(r.id)] = 'yes'; });
+  return Object.keys(want).length ? DB_setColumnById_(SHEETS.BEHAVIOR, 'canceled', want) : 0;
 }
 
 // ── ซ่อมแถวที่เขียนช่วง v1.0.6–1.0.7 (ตอนนั้น ref_id ถูกแทรก "กลาง" schema → คอลัมน์เลื่อน) ──
@@ -187,9 +186,11 @@ function Behavior_repairShift_() {
   return { fixed: fixed, total: vals.length };
 }
 
-// คำนวณคะแนนใหม่ทั้งระบบจากรายการจริง (ความประพฤติ + มาสาย) — single scan + batch
-function Behavior_recomputeAll(user, p) {
-  Auth_requireCap(user, 'student.manage');
+// คำนวณคะแนนใหม่ทั้งระบบจากรายการจริง (ความประพฤติ + มาสาย)
+// อ่านแต่ละชีตครั้งเดียว + เขียนคอลัมน์ score / late_score ครั้งเดียว — รองรับนักเรียนหลักพันโดยไม่หมดเวลา
+// ★ เรียกภายใน DB_withLock_ เสมอ (ใช้ทั้งปุ่ม/เมนูคำนวณใหม่ และ migration v1.1.0)
+function _recomputeAllScores_() {
+  _freshVer_();
   var shift = Behavior_repairShift_();          // ซ่อมคอลัมน์ที่เลื่อนก่อน (ถ้ามี) แล้วค่อยคำนวณคะแนน
   var retired = Behavior_retireAuto_();          // AUTO เก่า → ยกเลิก (มาสายแยกก้อนแล้ว)
   var sums = {};
@@ -198,17 +199,19 @@ function Behavior_recomputeAll(user, p) {
     var k = String(r.student_id);
     sums[k] = (sums[k] || 0) + cfg_num_(r.points);
   });
-  var stus = DB_readLite(SHEETS.STUDENTS), fixed = 0;
-  DB_beginBatch();
-  try {
-    stus.forEach(function (s) {
-      var want = _clampScore_(-(sums[String(s.id)] || 0));
-      if (cfg_num_(s.score) !== want) { DB_update(SHEETS.STUDENTS, s.id, { score: want }); fixed++; }
-    });
-  } finally { DB_endBatch(); }
+  var stus = DB_readLite(SHEETS.STUDENTS), want = {};
+  stus.forEach(function (s) { want[String(s.id)] = _clampScore_(-(sums[String(s.id)] || 0)); });
+  var fixed = DB_setColumnById_(SHEETS.STUDENTS, 'score', want);
   var late = Late_recomputeAll_();
-  Audit_log_(user, 'score.recompute', 'student', '', { fixed: fixed, late_fixed: late.fixed, total: stus.length, shift_fixed: shift.fixed, auto_retired: retired });
-  return { ok: true, fixed: fixed, late_fixed: late.fixed, total: stus.length, shift_fixed: shift.fixed, auto_retired: retired };
+  return { fixed: fixed, late_fixed: late.fixed, total: stus.length, shift_fixed: shift.fixed, auto_retired: retired };
+}
+function Behavior_recomputeAll(user, p) {
+  Auth_requireCap(user, 'student.manage');
+  var r;
+  DB_withLock_(function () { r = _recomputeAllScores_(); }, 60000);
+  Audit_log_(user, 'score.recompute', 'student', '', r);
+  r.ok = true;
+  return r;
 }
 
 function Behavior_list(user, p) {
@@ -253,6 +256,7 @@ function Behavior_cancel(user, p) {
   if (!hasCap_(user.role, 'behavior.view_all') && String(r.created_by) !== String(user.id)) throw new Error('ยกเลิกได้เฉพาะรายการที่คุณบันทึกเอง');
   var map = Settings_map_(), signed = cfg_num_(r.points), sid = String(r.student_id), score = null;
   DB_withLock_(function () {
+    _freshVer_();
     DB_update(SHEETS.BEHAVIOR, id, { canceled: 'yes' });
     score = _recomputeScore_(sid);                // คำนวณใหม่จากรายการที่เหลือ — คืนคะแนนถูกเสมอ
   });

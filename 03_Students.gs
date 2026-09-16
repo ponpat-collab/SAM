@@ -208,12 +208,18 @@ function Students_import(user, p) {
 }
 
 // ── reset scores (ขึ้นปีการศึกษาใหม่) — คะแนนความประพฤติ + มาสาย กลับเป็น 0 ทุกคน (ประวัติเก่ายังอยู่) ──
+// เขียน 2 คอลัมน์ครั้งเดียว (ไม่ DB_update ทีละคน)
 function Students_resetScores(user, p) {
   Auth_requireCap(user, 'score.reset');
-  var actives = DB_readAll(SHEETS.STUDENTS).filter(function (s) { return String(s.status) === STU_STATUS.ACTIVE; });
-  DB_beginBatch();
-  try { actives.forEach(function (s) { if (cfg_num_(s.score) !== 0 || cfg_num_(s.late_score) !== 0) DB_update(SHEETS.STUDENTS, s.id, { score: 0, late_score: 0 }); }); }
-  finally { DB_endBatch(); }
-  Audit_log_(user, 'score.reset', 'student', '', { count: actives.length });
-  return { ok: true, count: actives.length };
+  var count = 0;
+  DB_withLock_(function () {
+    _freshVer_();
+    var zero = {};
+    DB_readLite(SHEETS.STUDENTS).forEach(function (s) { if (String(s.status) === STU_STATUS.ACTIVE) zero[String(s.id)] = 0; });
+    count = Object.keys(zero).length;
+    DB_setColumnById_(SHEETS.STUDENTS, 'score', zero);
+    DB_setColumnById_(SHEETS.STUDENTS, 'late_score', zero);
+  }, 60000);
+  Audit_log_(user, 'score.reset', 'student', '', { count: count });
+  return { ok: true, count: count };
 }

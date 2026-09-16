@@ -88,10 +88,12 @@ function Late_save(user, p) {
 function _lateCreateCore_(stu, opt) {
   var sid = stu.id;
   var date = opt.date || cfg_today_();
-  var dup = DB_byLite(SHEETS.LATE, 'student_id', sid).filter(function (r) { return cfg_d10_(r.date) === date && !_yes_(r.canceled); });
-  if (dup.length) throw new Error('นักเรียนคนนี้ถูกบันทึกมาสายในวันนี้แล้ว — บันทึกซ้ำในวันเดียวกันไม่ได้');
   var map = Settings_map_(), rec, detail;
   DB_withLock_(function () {
+    _freshVer_();                                  // เห็นรายการที่ execution อื่นเพิ่งเขียน ก่อนตรวจซ้ำ/คำนวณลำดับครั้ง
+    // ★ ตรวจซ้ำ "ในล็อก" — นอกล็อก นักเรียนกดเอง + ครูบันทึกพร้อมกันจะผ่านทั้งคู่ → มาสาย 2 แถว = นับหักเกิน 1 ครั้ง
+    var dup = DB_byLite(SHEETS.LATE, 'student_id', sid).filter(function (r) { return cfg_d10_(r.date) === date && !_yes_(r.canceled); });
+    if (dup.length) throw new Error('นักเรียนคนนี้ถูกบันทึกมาสายในวันนี้แล้ว — บันทึกซ้ำในวันเดียวกันไม่ได้');
     rec = DB_insert(SHEETS.LATE, {
       id: _genSeq_('L', DB_rowCount(SHEETS.LATE)), date: date, time: cfg_timeNow_(), student_id: sid,
       reason: opt.reason || 'ไม่ระบุ', note: opt.note || '',
@@ -173,6 +175,7 @@ function Late_cancel(user, p) {
   if (!hasCap_(user.role, 'late.view_all') && String(r.created_by) !== String(user.id)) throw new Error('ยกเลิกได้เฉพาะรายการที่คุณบันทึกเอง');
   var map = Settings_map_(), detail;
   DB_withLock_(function () {
+    _freshVer_();
     DB_update(SHEETS.LATE, id, { canceled: 'yes' });
     detail = _recomputeLateScore_(String(r.student_id), map);   // ลำดับครั้ง/ยอดหักคำนวณใหม่จากรายการที่เหลือ
   });
@@ -180,19 +183,15 @@ function Late_cancel(user, p) {
   return { ok: true, late_score: detail.score };
 }
 
-// คำนวณคะแนนมาสายใหม่ทั้งระบบ (single scan + batch) — ใช้หลังเปลี่ยนภาคเรียน/ตาราง/เวลาตัด หรือซ่อมข้อมูล
+// คำนวณคะแนนมาสายใหม่ทั้งระบบ — scan ชีตมาสายครั้งเดียว + เขียนคอลัมน์ late_score ครั้งเดียว (ไม่ DB_update ทีละคน)
+// ใช้หลังเปลี่ยนภาคเรียน/ตาราง/เวลาตัด หรือซ่อมข้อมูล · ★ เรียกภายใน DB_withLock_ เสมอ
 function Late_recomputeAll_(map) {
+  _freshVer_();
   map = map || Settings_map_();
-  var details = _lateScoreDetailMany_(null, map);
-  var stus = DB_readLite(SHEETS.STUDENTS), fixed = 0;
-  DB_beginBatch();
-  try {
-    stus.forEach(function (s) {
-      var d = details[String(s.id)], want = d ? d.score : 0;
-      if (cfg_num_(s.late_score) !== want) { DB_update(SHEETS.STUDENTS, s.id, { late_score: want }); fixed++; }
-    });
-  } finally { DB_endBatch(); }
-  return { fixed: fixed, total: stus.length };
+  var details = _lateScoreDetailMany_(null, map), want = {};
+  var stus = DB_readLite(SHEETS.STUDENTS);
+  stus.forEach(function (s) { var d = details[String(s.id)]; want[String(s.id)] = d ? d.score : 0; });
+  return { fixed: DB_setColumnById_(SHEETS.STUDENTS, 'late_score', want), total: stus.length };
 }
 
 // ขึ้นภาคเรียนใหม่ — 1→2 · 2→1 ของปีถัดไป · คะแนนมาสายทุกคนเริ่มนับใหม่ (รายการเก่ายังอยู่ · term เดิม)
@@ -201,7 +200,8 @@ function Term_next(user, p) {
   var map = Settings_map_(), term = cfg_int_(map.current_term) || 1, year = cfg_int_(map.academic_year) || 0;
   var patch = term >= 2 ? { current_term: '1', academic_year: String(year + 1) } : { current_term: '2' };
   DB_eavSet(SHEETS.SETTINGS, patch);
-  var map2 = Settings_map_(), r = Late_recomputeAll_(map2);
+  var map2 = Settings_map_(), r;
+  DB_withLock_(function () { r = Late_recomputeAll_(map2); }, 60000);
   Audit_log_(user, 'term.next', 'setting', '', { term: _termKey_(map2), late_fixed: r.fixed });
   return { ok: true, term: _termKey_(map2), academic_year: map2.academic_year, current_term: map2.current_term, late_fixed: r.fixed };
 }

@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        14_Menu.gs — เมนูในชีต · เริ่มใช้งาน · สิทธิ์ · trigger · About
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -63,8 +63,9 @@ function menu_authorize() {
 function menu_seedDemo() { var r = Seed_demoData_(); SpreadsheetApp.getUi().alert('🌱 เพิ่มข้อมูลตัวอย่าง', 'เพิ่มนักเรียน ' + r.students + ' คน + ประวัติตัวอย่าง', SpreadsheetApp.getUi().ButtonSet.OK); }
 function menu_clearDemo() {
   var ui = SpreadsheetApp.getUi();
-  if (ui.alert('ล้างข้อมูลตัวอย่าง', 'ลบนักเรียนตัวอย่าง (รหัส 3xxxx) ทั้งหมด?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  var r = Seed_clearDemo_(); ui.alert('เรียบร้อย', 'ลบ ' + r.removed + ' รายการ', ui.ButtonSet.OK);
+  if (ui.alert('ล้างข้อมูลตัวอย่าง', 'ลบนักเรียนตัวอย่าง (รหัส ' + DEMO_STUDENT_FIRST + '–' + (DEMO_STUDENT_FIRST + DEMO_STUDENT_COUNT - 1) + ') ทั้งหมด พร้อมประวัติมาสาย / ลากลับ / คะแนนของนักเรียนเหล่านี้?\n(ผู้ใช้ ตั้งค่า และฐานความผิด ไม่ถูกลบ)', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var r = Seed_clearDemo_();
+  ui.alert('เรียบร้อย', 'ลบนักเรียน ' + r.students + ' คน · มาสาย ' + r.late + ' · ลากลับ ' + r.leave + ' · คะแนน ' + r.behavior + ' รายการ', ui.ButtonSet.OK);
 }
 function menu_repairSettings() { var r = Settings_repair({ role: 'admin' }, {}); SpreadsheetApp.getUi().alert('🔧 ซ่อมค่าตั้งค่า', 'บังคับเป็น text แล้ว ' + r.fixed + ' แถว', SpreadsheetApp.getUi().ButtonSet.OK); }
 function menu_recomputeScores() {

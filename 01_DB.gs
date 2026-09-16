@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        01_DB.gs — Sheet-as-DB · แคช 3 ชั้น (version-keyed) · batch · lock
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -26,10 +26,14 @@ function _ss_() { if (!__SS) __SS = SpreadsheetApp.getActiveSpreadsheet(); retur
 function _cache_() { return CacheService.getScriptCache(); }
 
 // ── version keys ───────────────────────────────────────────────
-function _ver_(scope) {
+function _propsMemo_() {
   if (!__VERMEMO) __VERMEMO = PropertiesService.getScriptProperties().getProperties() || {};
-  return Number(__VERMEMO['ver:' + scope] || '1');
+  return __VERMEMO;
 }
+function _ver_(scope) { return Number(_propsMemo_()['ver:' + scope] || '1'); }
+// เรียกเป็นบรรทัดแรกใน DB_withLock_ ก่อน "อ่านรายการแล้วเขียนค่าที่คำนวณ" — ทิ้ง version memo ของ request นี้
+// เพื่อให้เห็นรายการที่ execution อื่นเขียนไปก่อนเราได้ล็อก (L1/Cache ผูก version → อ่านสดเอง)
+function _freshVer_() { __VERMEMO = null; }
 function _verAll_(scopes) { return scopes.map(function (s) { return _ver_('sheet:' + s); }).join('.'); }
 function _bumpVer_(scope) {
   if (__BATCH) { __BATCH_DIRTY[scope] = true; return; }
@@ -322,6 +326,40 @@ function DB_deleteBy(name, col, value) {
   var n = 0;
   for (var j = 0; j < rows.length;) {
     var end = rows[j], start = end, cnt = 1;
+    while (j + 1 < rows.length && rows[j + 1] === start - 1) { start = rows[j + 1]; cnt++; j++; }
+    sh.deleteRows(start, cnt); n += cnt; j++;
+  }
+  if (n) { _flush_(); _bumpVer_('sheet:' + name); }
+  return n;
+}
+
+// ── bulk column write — แทน DB_update ใน loop (อ่าน id + คอลัมน์เป้าหมาย 1 ครั้ง · เขียนกลับ 1 ครั้ง) ──
+// valueById = { id: ค่าใหม่ } · แถวที่ไม่มีใน map ไม่แตะ · คืนจำนวนแถวที่เปลี่ยนจริง
+// เรียกภายใน DB_withLock_ เสมอ (read-modify-write ทั้งคอลัมน์ — กันทับค่าที่ execution อื่นเขียนพร้อมกัน)
+function DB_setColumnById_(name, col, valueById) {
+  var sh = DB_ensureSchema_(name), cols = SCHEMAS[name], ci = cols.indexOf(col), ki = cols.indexOf('id');
+  if (ci < 0) throw new Error('ไม่มีคอลัมน์ ' + col + ' ใน ' + name);
+  if (ki < 0) ki = 0;
+  var last = sh.getLastRow(); if (last < 2) return 0;
+  var n = last - 1, ids = sh.getRange(2, ki + 1, n, 1).getValues(), cur = sh.getRange(2, ci + 1, n, 1).getValues(), changed = 0;
+  for (var i = 0; i < n; i++) {
+    var id = String(ids[i][0]);
+    if (!id || !Object.prototype.hasOwnProperty.call(valueById, id)) continue;
+    if (String(cur[i][0]) !== String(valueById[id])) { cur[i][0] = valueById[id]; changed++; }
+  }
+  if (changed) { sh.getRange(2, ci + 1, n, 1).setValues(cur); _flush_(); _bumpVer_('sheet:' + name); }
+  return changed;
+}
+// ลบทุกแถวที่ test(ค่าในคอลัมน์) เป็นจริง — อ่านคอลัมน์ครั้งเดียว · ลบเป็นก้อนติดกันจากล่างขึ้นบน
+function DB_deleteWhere_(name, col, test) {
+  var sh = DB_ensureSchema_(name), cols = SCHEMAS[name], ci = cols.indexOf(col);
+  if (ci < 0) return 0;
+  var last = sh.getLastRow(); if (last < 2) return 0;
+  var keys = sh.getRange(2, ci + 1, last - 1, 1).getValues(), rows = [];
+  for (var i = keys.length - 1; i >= 0; i--) if (test(keys[i][0])) rows.push(i + 2);
+  var n = 0;
+  for (var j = 0; j < rows.length;) {
+    var start = rows[j], cnt = 1;
     while (j + 1 < rows.length && rows[j + 1] === start - 1) { start = rows[j + 1]; cnt++; j++; }
     sh.deleteRows(start, cnt); n += cnt; j++;
   }

@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        13_Seed.gs — บัญชีเริ่มต้น · ฐานความผิด · ข้อมูลตัวอย่าง
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -65,6 +65,15 @@ function Seed_ensureOffenses_() {
 }
 
 // ── demo students + records ────────────────────────────────────
+// รหัสนักเรียนตัวอย่าง = ช่วงคงที่ 30000–30095 (ม.1–6 × 2 ห้อง × 8 คน) — ใช้ร่วมกันทั้ง "สร้าง" และ "ล้าง"
+// ★ ห้ามใช้รูปแบบกว้าง (เช่น /^3\d{4}$/) — ชนรหัสนักเรียนจริงที่ขึ้นต้นด้วย 3 แล้วลบทั้งคนพร้อมประวัติ
+var DEMO_STUDENT_FIRST = 30000, DEMO_STUDENT_COUNT = 6 * 2 * 8;
+function _isDemoStudentId_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!/^\d{5}$/.test(s)) return false;
+  var n = Number(s);
+  return n >= DEMO_STUDENT_FIRST && n < DEMO_STUDENT_FIRST + DEMO_STUDENT_COUNT;
+}
 var _FN = ['สมชาย', 'สมหญิง', 'ณัฐพล', 'ปิยะดา', 'ธนกร', 'กมลชนก', 'ภูริพัฒน์', 'ศิริพร', 'อนุชา', 'จิราภรณ์',
   'ธีรภัทร', 'พิมพ์ชนก', 'วีรภัทร', 'ณัฐธิดา', 'กิตติศักดิ์', 'อริสรา', 'ชนาธิป', 'มนัสนันท์', 'ปรเมศวร์', 'สุพิชญา',
   'ก้องภพ', 'ธัญชนก', 'พีรพล', 'ณิชกานต์', 'จักรพงษ์', 'วรรณิดา', 'ศุภกร', 'ปาริชาต', 'นราวิชญ์', 'อัจฉรา'];
@@ -79,7 +88,7 @@ function Seed_demoData_() {
   var map = Settings_map_();
   // students: ม.1-6, ห้อง 1-2, 8 คน/ห้อง
   var advisors = { '3/1': 'นายครูที่ปรึกษา ม.3/1' };
-  var students = [], idSeq = 30000;
+  var students = [], idSeq = DEMO_STUDENT_FIRST;
   for (var cls = 1; cls <= 6; cls++) {
     for (var room = 1; room <= 2; room++) {
       for (var no = 1; no <= 8; no++) {
@@ -135,17 +144,21 @@ function Seed_demoData_() {
     var bDateStr = Utilities.formatDate(bDate, APP.TIMEZONE, 'yyyy-MM-dd');
     try { Behavior_save(teacher, { student_id: st.id, kind: 'deduct', offense_code: of.code, detail: 'ตัวอย่างข้อมูล', date: bDateStr }); } catch (e) {}
   }
-  Late_recomputeAll_();                        // คะแนนมาสายของตัวอย่างที่ bulk insert (ไม่ผ่าน core)
+  DB_withLock_(function () { Late_recomputeAll_(); }, 60000);   // คะแนนมาสายของตัวอย่างที่ bulk insert (ไม่ผ่าน core)
   return { students: toAdd.length, message: 'เพิ่มข้อมูลตัวอย่างเรียบร้อย' };
 }
 
+// ลบข้อมูลตัวอย่าง = นักเรียนรหัส 30000–30095 "พร้อมประวัติของนักเรียนเหล่านั้น" (มาสาย/ลากลับ/คะแนน)
+// v1.0.x ลบแค่แถวนักเรียน → ประวัติค้างเป็นแถวกำพร้า แล้วกลับมาผูกเมื่อเพิ่มตัวอย่างใหม่ (รหัสเดิม) → คะแนนเพี้ยน
 function Seed_clearDemo_() {
-  // ลบเฉพาะข้อมูลตัวอย่าง (นักเรียน id 30000-39999 + records ที่อ้าง)
-  var sh = DB_ensureSchema_(SHEETS.STUDENTS), cols = SCHEMAS.Students, last = sh.getLastRow(), removed = 0;
-  if (last >= 2) {
-    var ids = sh.getRange(2, 1, last - 1, 1).getValues();
-    for (var i = ids.length - 1; i >= 0; i--) { var id = String(ids[i][0]); if (/^3\d{4}$/.test(id)) { sh.deleteRow(i + 2); removed++; } }
-  }
-  _bumpVer_('sheet:' + SHEETS.STUDENTS);
-  return { removed: removed };
+  var demo = _isDemoStudentId_;
+  var out = { students: 0, late: 0, leave: 0, behavior: 0 };
+  DB_withLock_(function () {
+    out.late = DB_deleteWhere_(SHEETS.LATE, 'student_id', demo);
+    out.leave = DB_deleteWhere_(SHEETS.LEAVE, 'student_id', demo);
+    out.behavior = DB_deleteWhere_(SHEETS.BEHAVIOR, 'student_id', demo);
+    out.students = DB_deleteWhere_(SHEETS.STUDENTS, 'id', demo);
+  }, 60000);
+  out.removed = out.students;
+  return out;
 }

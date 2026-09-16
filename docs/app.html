@@ -2103,7 +2103,7 @@ button{font-family:inherit}
 
   <!-- ═══════════════════════════════════════════════════════════════
   ระบบงานปกครองนักเรียน (SAM) · ScriptsPages2.html — นักเรียน · รายการ · รายงาน · แอดมิน
-  Version: 1.0.0 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Version: 1.1.0 (2026-09-16) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
   Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
 ═══════════════════════════════════════════════════════════════ -->
 <script type="text/x-sam" id="sam-pages2">
@@ -2721,7 +2721,7 @@ button{font-family:inherit}
   });
   function loadAudit(q) {
     var host = $('#au-list'); if (!host) return; host.innerHTML = '<div class="skel" style="height:300px"></div>';
-    var labels = { 'auth.login': 'เข้าสู่ระบบ', 'auth.fail': 'ล็อกอินล้มเหลว', 'student.create': 'เพิ่มนักเรียน', 'student.update': 'แก้ไขนักเรียน', 'student.delete': 'จำหน่ายนักเรียน', 'student.import': 'นำเข้านักเรียน', 'late.create': 'บันทึกมาสาย', 'late.cancel': 'ยกเลิกมาสาย', 'leave.create': 'บันทึกลากลับ', 'leave.cancel': 'ยกเลิกลากลับ', 'behavior.deduct': 'หักคะแนน', 'behavior.add': 'เพิ่มคะแนน', 'behavior.cancel': 'ยกเลิกคะแนน', 'offense.create': 'เพิ่มฐานความผิด', 'offense.update': 'แก้ฐานความผิด', 'offense.delete': 'ลบฐานความผิด', 'user.create': 'เพิ่มผู้ใช้', 'user.update': 'แก้ผู้ใช้', 'user.delete': 'ลบผู้ใช้', 'user.reset_password': 'รีเซ็ตรหัสผ่าน', 'setting.update': 'แก้ตั้งค่า', 'score.reset': 'รีเซ็ตคะแนน', 'score.recompute': 'คำนวณคะแนนใหม่', 'term.next': 'ขึ้นภาคเรียนใหม่', 'late.self': 'นักเรียนบันทึกมาสายเอง', 'leave.self': 'นักเรียนยื่นลากลับเอง', 'file.upload': 'อัปโหลดไฟล์' };
+    var labels = { 'auth.login': 'เข้าสู่ระบบ', 'auth.fail': 'ล็อกอินล้มเหลว', 'student.create': 'เพิ่มนักเรียน', 'student.update': 'แก้ไขนักเรียน', 'student.delete': 'จำหน่ายนักเรียน', 'student.import': 'นำเข้านักเรียน', 'late.create': 'บันทึกมาสาย', 'late.cancel': 'ยกเลิกมาสาย', 'leave.create': 'บันทึกลากลับ', 'leave.cancel': 'ยกเลิกลากลับ', 'behavior.deduct': 'หักคะแนน', 'behavior.add': 'เพิ่มคะแนน', 'behavior.cancel': 'ยกเลิกคะแนน', 'offense.create': 'เพิ่มฐานความผิด', 'offense.update': 'แก้ฐานความผิด', 'offense.delete': 'ลบฐานความผิด', 'user.create': 'เพิ่มผู้ใช้', 'user.update': 'แก้ผู้ใช้', 'user.delete': 'ลบผู้ใช้', 'user.reset_password': 'รีเซ็ตรหัสผ่าน', 'setting.update': 'แก้ตั้งค่า', 'score.reset': 'รีเซ็ตคะแนน', 'score.recompute': 'คำนวณคะแนนใหม่', 'term.next': 'ขึ้นภาคเรียนใหม่', 'migrate.v110': 'ย้ายข้อมูล v1.1.0 (อัตโนมัติ)', 'late.self': 'นักเรียนบันทึกมาสายเอง', 'leave.self': 'นักเรียนยื่นลากลับเอง', 'file.upload': 'อัปโหลดไฟล์' };
     call('audit.list', { q: q, limit: 300 }).then(function (d) {
       if (!$('#au-list')) return;
       if (!d.items.length) { host.innerHTML = emptyBox('clipboard', 'ไม่มีประวัติ'); return; }
@@ -2766,6 +2766,6 @@ button{font-family:inherit}
 })();
 </script>
 
-  <!-- build:2026-09-16T15:19:06.018Z -->
+  <!-- build:2026-09-16T15:37:46.667Z -->
 </body>
 </html>

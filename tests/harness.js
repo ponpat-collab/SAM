@@ -342,6 +342,98 @@ ok(rc.ok && rc.fixed >= 1 && rc.auto_retired === 1, 'behavior.recompute ซ่�
 ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === 25, 'สะสมคำนวณกลับจากรายการจริง = 25 (ไม่นับ AUTO)');
 ok(Number(api('student.lookup', adminTok, { id: '40011' }).student.late_score) === 0, 'มาสายภาคเรียน 2 ยังคำนวณใหม่ถูก (ครั้งที่ 1 = 0)');
 
+// ── อ่านสดในล็อก (_freshVer_): อีกเครื่องเขียนระหว่างที่ request นี้ยังถือ version memo เก่า ──
+// helper api() ของ harness ไม่ _resetReq_ → memo ค้างข้ามคำสั่งพอดี = จำลอง "รอล็อกอยู่ขณะอีกเครื่องเขียน"
+(function () {
+  function otherExecWrite(sheet, obj) {            // เขียนตรงลงชีต + bump version ใน ScriptProperties เท่านั้น (memo ของ request นี้ไม่รู้)
+    var cols = SCHEMAS[sheet], sh = DB_ensureSchema_(sheet);
+    sh.getRange(sh.getLastRow() + 1, 1, 1, cols.length).setValues([cols.map(function (c) { return obj[c] == null ? '' : obj[c]; })]);
+    var k = 'ver:sheet:' + sheet; _props[k] = String(Number(_props[k] || '1') + 1);
+  }
+  api('student.save', adminTok, { is_new: true, id: '40021', prefix: 'เด็กชาย', first_name: 'พร้อม', last_name: 'กัน', class_level: '3', room: '1', number: '21', advisor_name: 'ครูเอ' });
+  api('behavior.save', adminTok, { student_id: '40021', kind: 'deduct', offense_name: 'ครูคนที่ 1', points: 10, points_override: true });
+  ok(_behaviorSum_('40021') === -10, 'อุ่นแคชของ request นี้ (สะสม 10)');
+  otherExecWrite(SHEETS.BEHAVIOR, { id: 'BOTHER1', date: '2026-11-04', time: '10:00', student_id: '40021', kind: 'deduct', offense_name: 'ครูคนที่ 2', category: 'ทั่วไป', points: -7, score_after: 17, created_by: 'x', created_by_name: 'x', canceled: 'no', rev: 1 });
+  var r = api('behavior.save', adminTok, { student_id: '40021', kind: 'deduct', offense_name: 'ครูคนที่ 1 อีกครั้ง', points: 5, points_override: true });
+  ok(r.score_after === 22 && Number(DB_get(SHEETS.STUDENTS, '40021').score) === 22, '★★ หักคะแนนพร้อมกัน 2 เครื่อง → นับรายการของอีกเครื่องด้วย (10+7+5 = 22 ไม่ใช่ 15)');
+
+  api('student.save', adminTok, { is_new: true, id: '40022', prefix: 'เด็กหญิง', first_name: 'กด', last_name: 'พร้อมครู', class_level: '3', room: '1', number: '22', advisor_name: 'ครูเอ' });
+  api('late.save', adminTok, { student_id: '40022', reason: 'รถติด', date: '2026-11-03', arrive_time: '08:50' });
+  ok(api('late.list', adminTok, { student_id: '40022' }).total === 1, 'อุ่นแคชมาสายของ request นี้');
+  otherExecWrite(SHEETS.LATE, { id: 'LOTHER1', date: '2026-11-05', time: '08:50', student_id: '40022', reason: 'นักเรียนกดเอง', canceled: 'no', rev: 1, arrive_time: '08:50', term: _termKey_(Settings_map_()) });
+  try { api('late.save', adminTok, { student_id: '40022', reason: 'ครูบันทึก', date: '2026-11-05', arrive_time: '08:52' }); ok(false, 'ต้องกันมาสายซ้ำวันเดียวกัน'); }
+  catch (e) { ok(/ซ้ำ/.test(e.message), '★★ ครูบันทึกวันเดียวกับที่นักเรียนเพิ่งกดเอง (อีกเครื่อง) → กันได้ในล็อก'); }
+  ok(api('late.list', adminTok, { student_id: '40022' }).total === 2, 'มาสาย 40022 = 2 วัน ไม่มีแถวซ้ำ (ไม่นับหักเกิน)');
+})();
+
+// ── ย้ายข้อมูล v1.1.0 อัตโนมัติ: ชีตจริงที่ deploy ทับ v1.0.x ──
+// (เกณฑ์เตือนแบบคงเหลือค้าง · score เป็นคะแนนคงเหลือ · AUTO ค้าง · มาสายเก่าไม่มี arrive_time/term)
+// ★ ต้องผ่าน api() ตัวจริง (G.api) — helper api() ของ harness เรียก _dispatch_ ตรงจึงไม่ผ่าน _migrate_
+(function () {
+  var MKEY = 'migr:v110_score_accum';
+  function auditCount() { return DB_readAll(SHEETS.AUDIT).filter(function (r) { return r.action === 'migrate.v110'; }).length; }
+  ok(_props[MKEY] === undefined, 'ก่อนทดสอบ: ยังไม่เคยย้ายข้อมูล');
+  DB_eavSet(SHEETS.SETTINGS, { alert_level_1: '60', alert_level_2: '40', alert_level_3: '20' });
+  ok(_scoreAlert_(25, Settings_map_()).level === 3, 'สภาพก่อนย้าย: เกณฑ์ 60/40/20 ค้าง → สะสม 25 กลายเป็นระดับ 3 (กลับหัว = บั๊กที่ migration ต้องแก้)');
+  api('student.save', adminTok, { is_new: true, id: '40020', prefix: 'เด็กชาย', first_name: 'อัปเกรด', last_name: 'เวอร์ชัน', class_level: '3', room: '1', number: '20', advisor_name: 'ครูเอ' });
+  DB_update(SHEETS.STUDENTS, '40020', { score: 85, late_score: '' });          // คะแนน "คงเหลือ" แบบ v1.0.x
+  var base = { date: '2026-07-01', time: '08:00', student_id: '40020', category: 'ทดสอบ', detail: '', photo_url: '', created_by: 'x', created_by_name: 'x', canceled: 'no', ref_id: '' };
+  DB_insert(SHEETS.BEHAVIOR, Object.assign({ id: 'BLEG1', kind: 'deduct', offense_code: 'B01', offense_name: 'หักเดิม', points: -15, score_after: 85 }, base));
+  DB_insert(SHEETS.BEHAVIOR, Object.assign({ id: 'BLEG2', kind: 'deduct', offense_code: 'AUTO', offense_name: 'มาสายเกินกำหนด', points: -5, score_after: 80 }, base));
+  ['2026-07-02', '2026-07-03', '2026-07-06'].forEach(function (d, i) {
+    DB_insert(SHEETS.LATE, { id: 'LLEG' + i, date: d, time: '09:00', student_id: '40020', reason: 'เดิม', note: '', created_by: 'x', created_by_name: 'x', canceled: 'no', arrive_time: '', term: '' });
+  });
+  var otherBefore = { s13: Number(DB_get(SHEETS.STUDENTS, '40013').score), l11: Number(DB_get(SHEETS.STUDENTS, '40011').late_score) };
+
+  var r1 = G.api({ action: 'app.bootstrap', token: adminTok, payload: {} });
+  var m = Settings_map_();
+  ok(r1.ok === true && _props[MKEY] === 'done', 'request แรกหลัง deploy → ย้ายข้อมูลอัตโนมัติ + ตั้ง flag');
+  ok(m.alert_level_1 === '40' && m.alert_level_2 === '60' && m.alert_level_3 === '80' && m.alert_level_4 === '100', 'เกณฑ์เตือนเป็นแบบสะสม 40/60/80/100');
+  ok(_scoreAlert_(25, m).level === 0, 'สะสม 25 → ปกติ (ระดับเตือนไม่กลับหัวแล้ว)');
+  ok(Number(DB_get(SHEETS.STUDENTS, '40020').score) === 15, '★★ คะแนนคงเหลือ 85 → สะสม 15 (คำนวณจากรายการ · ไม่นับ AUTO)');
+  ok(DB_get(SHEETS.BEHAVIOR, 'BLEG2').canceled === 'yes' && DB_get(SHEETS.BEHAVIOR, 'BLEG1').canceled === 'no', 'AUTO เก่าถูกยกเลิก · รายการหักจริงคงอยู่');
+  ok(Number(DB_get(SHEETS.STUDENTS, '40020').late_score) === 5, 'มาสายเก่า (ไม่มี arrive_time/term) → นับภาคเรียนนี้ เวลา 09:00 · ครั้งที่ 3 หัก 5');
+  ok(Number(DB_get(SHEETS.STUDENTS, '40013').score) === otherBefore.s13 && Number(DB_get(SHEETS.STUDENTS, '40011').late_score) === otherBefore.l11, 'นักเรียนที่คะแนนถูกอยู่แล้วไม่เปลี่ยน');
+  ok(auditCount() === 1, 'บันทึก audit migrate.v110 1 ครั้ง');
+
+  // รันซ้ำไม่ทับค่าที่แอดมินปรับหลังย้ายข้อมูล
+  api('setting.update', adminTok, { settings: { alert_level_1: '45' } });
+  G.api({ action: 'app.bootstrap', token: adminTok, payload: {} });
+  ok(Settings_map_().alert_level_1 === '45' && auditCount() === 1, 'request ถัดไปไม่ย้ายซ้ำ → เกณฑ์ที่แอดมินปรับ (45) ไม่ถูกทับ');
+
+  // execution อื่นย้ายเสร็จระหว่างรอล็อก (memo ในมือยังเก่า) → เช็คซ้ำในล็อกแล้วข้าม
+  G.__VERMEMO = {};
+  _migrate_();
+  ok(Settings_map_().alert_level_1 === '45' && auditCount() === 1, 'memo ค้างว่ายังไม่ย้าย → ตรวจซ้ำในล็อกแล้วไม่รันซ้ำ');
+
+  // migration ล้มเหลว → request ยังใช้งานได้ · ไม่ตั้ง flag (ลองใหม่ครั้งหน้า) · มี console.warn
+  var _warn = console.warn, warned = '';
+  console.warn = function (msg) { warned = String(msg); };
+  G.MIGRATIONS.push({ key: 't_fail', run: function () { throw new Error('boom'); } });
+  var rf = G.api({ action: 'app.bootstrap', token: adminTok, payload: {} });
+  G.MIGRATIONS.pop();
+  console.warn = _warn;
+  ok(rf.ok === true && /boom/.test(warned) && _props['migr:t_fail'] === undefined, 'migration ล้มเหลว → request ไม่พัง + ไม่ตั้ง flag + console.warn');
+})();
+
+// ── ล้างข้อมูลตัวอย่าง: ลบนักเรียนตัวอย่าง "พร้อมประวัติ" · ไม่แตะรหัสจริงที่ขึ้นต้นด้วย 3 ──
+(function () {
+  function cnt(sheet, sid) { return DB_readAll(sheet).filter(function (r) { return String(r.student_id) === sid; }).length; }
+  ['30005', '39999'].forEach(function (id, i) {
+    api('student.save', adminTok, { is_new: true, id: id, prefix: 'เด็กหญิง', first_name: 'รหัส' + id, last_name: 'ทดสอบ', class_level: '1', room: '1', number: String(i + 1), advisor_name: 'ครูเอ' });
+    api('late.save', adminTok, { student_id: id, reason: 'ตัวอย่าง', date: '2026-11-03', arrive_time: '08:45' });
+    api('behavior.save', adminTok, { student_id: id, kind: 'deduct', offense_name: 'ตัวอย่าง', points: 5, points_override: true });
+    api('leave.save', adminTok, { student_id: id, reason: 'ป่วย', guardian_name: 'นายพ่อ ดี', relation: 'บิดา', guardian_phone: '0812345678' });
+  });
+  var keep = { late: cnt(SHEETS.LATE, '40011'), beh: cnt(SHEETS.BEHAVIOR, '40013') };
+  var cd = Seed_clearDemo_();
+  ok(cd.students === 1 && cd.late === 1 && cd.leave === 1 && cd.behavior === 1, 'ล้างตัวอย่าง → ลบนักเรียน + มาสาย + ลากลับ + หักคะแนน อย่างละ 1 (' + JSON.stringify(cd) + ')');
+  ok(!DB_get(SHEETS.STUDENTS, '30005') && cnt(SHEETS.LATE, '30005') === 0 && cnt(SHEETS.LEAVE, '30005') === 0 && cnt(SHEETS.BEHAVIOR, '30005') === 0, 'ไม่มีแถวกำพร้าของนักเรียนตัวอย่างเหลือ');
+  ok(!!DB_get(SHEETS.STUDENTS, '39999') && cnt(SHEETS.LATE, '39999') === 1 && cnt(SHEETS.BEHAVIOR, '39999') === 1, '★★ รหัสจริง 39999 (ขึ้นต้นด้วย 3 แต่นอกช่วงตัวอย่าง) ไม่ถูกลบ');
+  ok(!!DB_get(SHEETS.STUDENTS, '40011') && cnt(SHEETS.LATE, '40011') === keep.late && cnt(SHEETS.BEHAVIOR, '40013') === keep.beh, 'ข้อมูลนักเรียนอื่นไม่ถูกแตะ');
+  ok(_isDemoStudentId_('30000') && _isDemoStudentId_(30095) && !_isDemoStudentId_('30096') && !_isDemoStudentId_('29999') && !_isDemoStudentId_(''), 'ช่วงรหัสตัวอย่าง = 30000–30095 พอดี');
+})();
+
 // logout
 api('auth.logout', adminTok, {});
 try { api('student.list', adminTok, {}); ok(false, 'token should be invalid after logout'); } catch (e) { ok(/เซสชัน|เข้าสู่ระบบ/.test(e.message), 'session invalidated after logout'); }

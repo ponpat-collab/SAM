@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  _audit.sh — Pre-deploy Audit Gate · 36 ด่าน (บังคับรันก่อน deploy ทุกครั้ง)
+#  _audit.sh — Pre-deploy Audit Gate · 37 ด่าน (บังคับรันก่อน deploy ทุกครั้ง)
 #  Version 1.1.0 · 2026-07-10 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
 #  Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น
 # ───────────────────────────────────────────────────────────────
@@ -417,6 +417,35 @@ else echo "  ⚠ jsdom ยังไม่ติดตั้ง (mkdir -p /tmp/sa
 ORPHAN=""
 for f in tests/*.js tests/*.py; do [ -f "$f" ] || continue; b=$(basename "$f"); case "$b" in _*) continue;; esac; grep -q "$b" _audit.sh tests/client_harness.js || ORPHAN="$ORPHAN $b"; done
 if [ -n "$ORPHAN" ]; then echo "  ✗ เทสต์ที่ไม่มีด่านไหนเรียก:$ORPHAN"; FAIL=1; else echo "  ✓ ไม่มีเทสต์กำพร้า"; fi
+
+echo "─37) data migration ผูกครบทุกทางเข้า (doGet · api · _warm_) + กันรันซ้ำ/ล้มเงียบ"
+node -e '
+var fs=require("fs");
+function strip(t){ return t.replace(/\/\*[\s\S]*?\*\//g,"").replace(/(^|[^:"\x27])\/\/.*$/gm,"$1"); }
+var code=strip(fs.readFileSync("Code.gs","utf8")), bad=[];
+function body(name){ var m=code.match(new RegExp("function "+name+"\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}")); return m?m[1]:null; }
+["doGet","api","_warm_"].forEach(function(fn){
+  var b=body(fn); if(b===null){ bad.push(fn+": หาฟังก์ชันไม่เจอ"); return; }
+  var iR=b.indexOf("_resetReq_()"), iM=b.indexOf("_migrate_()");
+  if(iM<0) bad.push(fn+": ไม่เรียก _migrate_()");
+  else if(iR<0||iM<iR) bad.push(fn+": _migrate_() ต้องอยู่หลัง _resetReq_()");
+  var iD=b.search(/_dispatch_\(|createTemplateFromFile|DB_read/);
+  if(iM>=0 && iD>=0 && iD<iM) bad.push(fn+": _migrate_() ต้องมาก่อนอ่าน/ส่งข้อมูล");
+});
+if(!fs.existsSync("16_Migrate.gs")) bad.push("ไม่มี 16_Migrate.gs");
+else {
+  var mg=strip(fs.readFileSync("16_Migrate.gs","utf8"));
+  var keys=[], m, re=/\{\s*key:\s*["\x27]([a-z0-9_]+)["\x27]\s*,\s*run:\s*([A-Za-z_$][\w$]*)\s*\}/g;
+  while((m=re.exec(mg))){ keys.push(m[1]); if(!new RegExp("function "+m[2]+"\\s*\\(").test(mg)) bad.push("run ไม่มีนิยาม: "+m[2]); }
+  if(!keys.length) bad.push("MIGRATIONS ว่าง/อ่านไม่ได้");
+  keys.forEach(function(k,i){ if(keys.indexOf(k)!==i) bad.push("key ซ้ำ: "+k); });
+  var mig=(mg.match(/function _migrate_\s*\(\)\s*\{([\s\S]*?)\n\}/)||[])[1]||"";
+  [["DB_withLock_(","รันในล็อก"],["getProperty(\x27migr:","ตรวจ flag ซ้ำในล็อก"],["setProperty(\x27migr:","ตั้ง flag หลังสำเร็จ"],["catch","ล้มเหลวต้องไม่ทำ request พัง"],["console.warn","ล้มเหลวต้องไม่เงียบ"]].forEach(function(x){ if(mig.indexOf(x[0])<0) bad.push("_migrate_ ขาด: "+x[1]); });
+  if(keys.length) console.log("  · migrations: "+keys.join(", "));
+}
+if(bad.length){ bad.forEach(function(x){ console.log("  ✗ "+x); }); process.exit(2); }
+console.log("  ✓ _migrate_ ผูกครบ doGet/api/_warm_ (หลัง _resetReq_ ก่อนอ่านข้อมูล) · มีล็อก + ตรวจซ้ำ + flag + ไม่ล้มเงียบ");
+' || FAIL=1
 
 echo "════════════════════════════════════════"
 if [ $FAIL -eq 0 ]; then

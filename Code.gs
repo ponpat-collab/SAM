@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        Code.gs — doGet · api router · warm/gc triggers
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -13,6 +13,7 @@
 function doGet(e) {
   _resetReq_();
   _ensureInit_();
+  _migrate_();
   var t = HtmlService.createTemplateFromFile('Index');
   t.BOOT_JSON = JSON.stringify({ boot: App_publicBundle_() }).replace(/<\/script/gi, '<\\/script');
   return t.evaluate()
@@ -48,6 +49,7 @@ function _ensureInit_() {
 function api(req) {
   try {
     _resetReq_();
+    _migrate_();
     var data = _dispatch_(req || {});
     return { ok: true, data: data };
   } catch (e) {
@@ -135,6 +137,7 @@ function _dispatch_(req) {
 // ── triggers (warm + gc) ───────────────────────────────────────
 function _warm_() {
   _resetReq_();
+  _migrate_();
   try { DB_readAll(SHEETS.SETTINGS); DB_readLite(SHEETS.STUDENTS); DB_readAll(SHEETS.OFFENSES); App_publicBundle_(); } catch (e) {}
   return (new Date()).toISOString();
 }
