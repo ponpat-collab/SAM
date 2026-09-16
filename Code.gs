@@ -81,6 +81,7 @@ function _dispatch_(req) {
     case 'student.delete': return Students_delete(user, payload);
     case 'student.import': return Students_import(user, payload);
     case 'student.reset_scores': return Students_resetScores(user, payload);
+    case 'term.next': return Term_next(user, payload);
 
     case 'late.save': return Late_save(user, payload);
     case 'late.list': return Late_list(user, payload);

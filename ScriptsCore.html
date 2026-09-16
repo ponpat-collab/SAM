@@ -214,7 +214,9 @@
   };
   function _emptyChart() { return '<div class="empty" style="padding:30px"><i class="bi bi-bar-chart"></i><div class="s">ยังไม่มีข้อมูล</div></div>'; }
 
-  A.scoreColor = function (score, start) { start = start || 100; var p = score / start; return p > .6 ? '#10b981' : (p > .4 ? '#f59e0b' : '#ef4444'); };
+  // คะแนนสะสม (0 ขึ้น) — ยิ่งมากยิ่งแดง · เกณฑ์จาก settings (alert_level_1 = เตือนแรก · alert_level_3 = พบรอง ผอ.)
+  A.scoreColor = function (score) { var st = (Store.boot && Store.boot.settings) || {}; var l1 = Number(st.alert_level_1) || 40, l3 = Number(st.alert_level_3) || 80; return score >= l3 ? '#ef4444' : (score >= l1 ? '#f59e0b' : '#10b981'); };
+  A.lateColor = function (score) { return score >= 20 ? '#ef4444' : (score >= 5 ? '#f59e0b' : '#10b981'); };
   A.alertBadge = function (a) { if (!a || a.level === 0) return ''; var m = { warn: 'b-warn', danger: 'b-danger' }; return '<span class="badge ' + (m[a.tone] || 'b-warn') + '"><i class="bi bi-exclamation-triangle-fill"></i> ' + esc(a.label) + '</span>'; };
   A.roleChip = function (role) { var lbl = (Store.boot.roles || {})[role] || role; return '<span class="role-chip role-chip-' + esc(role) + '"><i class="bi bi-shield-check"></i>' + esc(lbl) + '</span>'; };
 
@@ -444,7 +446,7 @@
         '<div class="ss-head ' + (isLate ? 'amber' : 'sky') + '"><button class="ss-back" data-ssback aria-label="กลับ"><i class="bi bi-arrow-left"></i></button>' +
           '<div class="ss-ht"><i class="bi bi-' + (isLate ? 'clock-history' : 'house-heart') + '"></i> ' + (isLate ? 'นักเรียนบันทึกมาสาย' : 'นักเรียนขออนุญาตกลับบ้าน') + '</div>' +
           '<div class="ss-hs">กรอกรหัสนักเรียนของตนเองแล้วกดค้นหา</div></div>' +
-        '<div class="ss-body"><form id="ss-form" autocomplete="off"><div class="ss-inrow"><input class="ss-input" id="ss-id" inputmode="numeric" enterkeyhint="search" placeholder="รหัสนักเรียน เช่น 30001"><button type="submit" class="ss-go" aria-label="ค้นหา"><i class="bi bi-search"></i></button></div></form>' +
+        '<div class="ss-body"><form id="ss-form" autocomplete="off"><div class="ss-inrow"><input class="ss-input" id="ss-id" inputmode="numeric" enterkeyhint="search" maxlength="5" pattern="[0-9]*" placeholder="รหัสนักเรียน 5 หลัก เช่น 30001"><button type="submit" class="ss-go" aria-label="ค้นหา"><i class="bi bi-search"></i></button></div></form>' +
           '<div id="ss-content"></div></div>' +
       '</div></div>';
     var idInp = $('#ss-id'), frm = $('#ss-form'), autoT = null;
@@ -452,6 +454,7 @@
     function lookup() {
       if (autoT) { clearTimeout(autoT); autoT = null; }
       var id = idInp.value.trim(); if (!id) return;
+      if (!/^\d{5}$/.test(id)) { toast('กรุณากรอกรหัสนักเรียนให้ครบ 5 หลัก', 'warning'); try { idInp.focus(); } catch (x) {} return; }   // ★ ล็อก 5 หลัก
       Spinner.show('กำลังค้นหานักเรียน…');
       call('public.student_lookup', { id: id }).then(function (d) {
         Spinner.hide(); st.student = d.student; st.reason = reasons[0] || ''; renderStep(d);
@@ -459,7 +462,8 @@
     }
     frm.addEventListener('submit', function (e) { e.preventDefault(); lookup(); });
     idInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
-    idInp.addEventListener('input', function () { if (autoT) clearTimeout(autoT); var v = idInp.value.trim(); if (v.length >= 4 && /^\d+$/.test(v)) autoT = setTimeout(lookup, 650); });
+    // รับเฉพาะตัวเลข 5 หลัก · ค้นหาอัตโนมัติเมื่อ "ครบ 5 พอดี" (ไม่ใช่ ≥4 — ลูกค้าเจอค้นหาก่อนพิมพ์ครบ)
+    idInp.addEventListener('input', function () { if (autoT) clearTimeout(autoT); var v = idInp.value.replace(/\D/g, '').slice(0, 5); if (v !== idInp.value) idInp.value = v; if (v.length === 5) autoT = setTimeout(lookup, 250); });
     $('[data-ssback]').addEventListener('click', function () { renderLogin(); });
 
     function renderStep(d) {
@@ -536,6 +540,7 @@
       $('#ss-content').innerHTML =
         '<div class="ss-done"><div class="ss-check"><i class="bi bi-check-lg"></i></div>' +
         '<div class="ss-dt">บันทึกเรียบร้อย!</div><div class="ss-ds">' + esc(r.student_name) + ' · เวลา ' + esc(r.time) + ' น.' + (isLate ? '' : ' · รอครูตรวจสอบผู้ปกครอง') + '</div>' +
+        (isLate && r.deduct > 0 ? '<div class="ss-warn" style="margin-top:10px"><i class="bi bi-exclamation-triangle"></i> ครั้งนี้ถูกหักคะแนนมาสาย ' + esc(String(r.deduct)) + ' คะแนน</div>' : '') +
         '<div class="ss-dbtns"><button class="btn btn-ghost" id="ss-again"><i class="bi bi-plus-lg"></i> บันทึกอีกคน</button><button class="btn btn-primary" data-ssback2><i class="bi bi-box-arrow-in-right"></i> กลับหน้าเข้าสู่ระบบ</button></div></div>';
       var f = $('#ss-form'); if (f) f.reset();
       st.student = null;
@@ -560,7 +565,7 @@
       ['grid-1x2', 'ภาพรวม', '<p>ระบบงานปกครองนักเรียนรวม 3 งานหลัก: บันทึกมาสาย · ขออนุญาตกลับบ้าน · หักคะแนนความประพฤติ พร้อมรายงานครบวงจร รองรับเครื่องยิงบาร์โค้ด USB/Bluetooth</p>'],
       ['box-arrow-in-right', 'เข้าสู่ระบบ', '<p>กรอกชื่อผู้ใช้/รหัสผ่าน หรือคลิกการ์ดบัญชีทดลอง มี 4 บทบาท: ผู้ดูแล · ครูฝ่ายปกครอง · ครูที่ปรึกษา (เห็นเฉพาะห้องตัวเอง) · ผู้บริหาร (ดูอย่างเดียว)</p>'],
       ['upc-scan', 'สแกนมาสาย/ลากลับ', '<p>เข้าเมนูที่ต้องการ → ยิงบาร์โค้ดหรือพิมพ์รหัสนักเรียน 5 หลัก → ระบบดึงข้อมูลอัตโนมัติ → เลือกสาเหตุ → บันทึก · ยิงต่อเนื่องได้ไม่จำกัด</p><div class="lm-step"><div class="sn">1</div><div class="sd">ยิงบาร์โค้ด/พิมพ์รหัส แล้ว Enter</div></div><div class="lm-step"><div class="sn">2</div><div class="sd">ตรวจข้อมูลนักเรียน + คะแนนคงเหลือ</div></div><div class="lm-step"><div class="sn">3</div><div class="sd">เลือกสาเหตุ/ถ่ายรูป (ลากลับ) แล้วบันทึก</div></div>'],
-      ['star', 'หักคะแนน', '<p>เลือกฐานความผิด คะแนนขึ้นอัตโนมัติ (ปรับได้) รองรับเพิ่มคะแนนทำความดี ระบบแจ้งเตือนเมื่อคะแนนต่ำกว่าเกณฑ์</p>'],
+      ['star', 'หักคะแนน', '<p>เลือกฐานความผิด คะแนนขึ้นอัตโนมัติ (ปรับได้) · คะแนนความประพฤติสะสมเริ่ม 0 นับขึ้น ถึง 40 แจ้งผู้ปกครอง · 60 เชิญผู้ปกครอง · 80 พบรองผู้อำนวยการ · 100 พบผู้อำนวยการ · ทำความดีลดยอดสะสมได้</p><p><b>คะแนนมาสาย</b> แยกอีกก้อน: มาถึงหลังเวลาตัด (ค่าเริ่มต้น 08:35 น.) นับเป็นครั้งที่ถูกหัก — ครั้งที่ 1-2 ไม่หัก · ครั้งที่ 3-7 หัก 5 · ครั้งที่ 8 ขึ้นไปหัก 10 · นับใหม่ทุกภาคเรียน · นักเรียนบันทึกเองก็หักตามเกณฑ์เดียวกัน</p>'],
       ['graph-up', 'รายงาน', '<p>แดชบอร์ดรายวัน · รายบุคคล (พิมพ์เชิญผู้ปกครอง) · รายห้อง · สรุปช่วงเวลา + กราฟ</p>'],
       ['gear', 'ตั้งค่า', '<p>ผู้ดูแลจัดการนักเรียน (นำเข้า Excel) · ฐานความผิด · สาเหตุ · เกณฑ์คะแนน · ผู้ใช้ · ธีม · Telegram · รีเซ็ตคะแนนปีใหม่</p>']
     ];

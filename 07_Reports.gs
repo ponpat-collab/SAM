@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        07_Reports.gs — Dashboard รายวัน · รายบุคคล · รายห้อง · ช่วงเวลา
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -51,11 +51,11 @@ function Reports_dashboard(user, p) {
   DB_readLite(SHEETS.LATE).forEach(function (r) { if (!_yes_(r.canceled) && inScope(r.student_id)) { var k = trendIx[cfg_d10_(r.date)]; if (k != null) trend[k].late++; } });
   DB_readLite(SHEETS.LEAVE).forEach(function (r) { if (!_yes_(r.canceled) && inScope(r.student_id)) { var k = trendIx[cfg_d10_(r.date)]; if (k != null) trend[k].leave++; } });
 
-  // at-risk students (low score) within scope
+  // at-risk students (คะแนนสะสมถึงเกณฑ์ที่ 1 ขึ้นไป) within scope — มากสุดก่อน
   var atRisk = DB_readLite(SHEETS.STUDENTS).filter(function (s) {
-    return (!scope || scope(s)) && String(s.status) === STU_STATUS.ACTIVE && cfg_num_(s.score) <= cfg_num_(map.alert_level_1);
-  }).map(function (s) { return { id: s.id, name: _stuName_(s), class_room: _stuClassRoom_(s), score: cfg_num_(s.score), alert: _scoreAlert_(s.score, map) }; })
-    .sort(function (a, b) { return a.score - b.score; }).slice(0, 12);
+    return (!scope || scope(s)) && String(s.status) === STU_STATUS.ACTIVE && cfg_num_(s.score) >= (cfg_num_(map.alert_level_1) || 40);
+  }).map(function (s) { return { id: s.id, name: _stuName_(s), class_room: _stuClassRoom_(s), score: cfg_num_(s.score), late_score: cfg_num_(s.late_score), alert: _scoreAlert_(s.score, map) }; })
+    .sort(function (a, b) { return b.score - a.score; }).slice(0, 12);
 
   var deductToday = behavior.filter(function (b) { return b.kind === 'deduct'; }).length;
   return {
@@ -73,9 +73,9 @@ function Reports_student(user, p) {
   var s = DB_get(SHEETS.STUDENTS, sid);
   if (!s) throw new Error('ไม่พบนักเรียน ' + sid);
   if (!_canSeeStudent_(user, s)) throw new Error('อยู่นอกห้องที่คุณดูแล');
-  var map = Settings_map_();
+  var map = Settings_map_(), lateD = _lateScoreDetail_(sid, map);
   var late = DB_byLite(SHEETS.LATE, 'student_id', sid).filter(function (r) { return !_yes_(r.canceled); })
-    .map(function (r) { return { id: r.id, date: cfg_d10_(r.date), time: r.time, reason: r.reason, by: r.created_by_name }; });
+    .map(function (r) { var d = lateD.per[r.id] || { rank: 0, deduct: 0 }; return { id: r.id, date: cfg_d10_(r.date), time: r.time, arrive_time: _lateArrive_(r), reason: r.reason, by: r.created_by_name, rank: d.rank, deduct: d.deduct, in_term: _lateInTerm_(r, _termKey_(map)) }; });
   var leave = DB_byLite(SHEETS.LEAVE, 'student_id', sid).filter(function (r) { return !_yes_(r.canceled); })
     .map(function (r) { return { id: r.id, date: cfg_d10_(r.date), time: r.time, reason: r.reason, guardian_name: r.guardian_name, relation: r.relation, photo_url: r.photo_url, by: r.created_by_name }; });
   var behavior = DB_byLite(SHEETS.BEHAVIOR, 'student_id', sid).filter(function (r) { return !_yes_(r.canceled); })
@@ -86,10 +86,11 @@ function Reports_student(user, p) {
   var scoreTrend = chron.map(function (r) { return { date: r.date, score: r.score_after }; });
   return {
     student: { id: s.id, name: _stuName_(s), prefix: s.prefix, first_name: s.first_name, last_name: s.last_name,
-      class_level: s.class_level, room: s.room, number: s.number, score: cfg_num_(s.score),
+      class_level: s.class_level, room: s.room, number: s.number, score: cfg_num_(s.score), late_score: cfg_num_(s.late_score),
       advisor_name: s.advisor_name, status: s.status },
-    alert: _scoreAlert_(s.score, map),
-    org: map.org_name, academic_year: map.academic_year, start_score: cfg_num_(map.start_score),
+    alert: _scoreAlert_(s.score, map), alert_levels: _alertLevels_(map),
+    org: map.org_name, academic_year: map.academic_year, term: _termKey_(map), max_score: 100,
+    late_term: { count: lateD.count, counted: lateD.counted, score: lateD.score, cutoff: cfg_time_(map.late_cutoff_time) || '08:35' },
     summary: { late: late.length, leave: leave.length, deduct: behavior.filter(function (b) { return b.kind === 'deduct'; }).length,
       add: behavior.filter(function (b) { return b.kind === 'add'; }).length,
       points_lost: behavior.reduce(function (a, b) { return a + (b.points < 0 ? -b.points : 0); }, 0) },

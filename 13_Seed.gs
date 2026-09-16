@@ -76,7 +76,7 @@ function Seed_demoData_() {
   Settings_ensureDefaults_();
   Seed_ensureUsers_();
   Seed_ensureOffenses_();
-  var map = Settings_map_(), startScore = cfg_num_(map.start_score) || 100;
+  var map = Settings_map_();
   // students: ม.1-6, ห้อง 1-2, 8 คน/ห้อง
   var advisors = { '3/1': 'นายครูที่ปรึกษา ม.3/1' };
   var students = [], idSeq = 30000;
@@ -88,7 +88,7 @@ function Seed_demoData_() {
           id: id, prefix: (no % 2 === 0 ? 'นางสาว' : (cls <= 3 ? 'เด็กชาย' : 'นาย')),
           first_name: _FN[(idSeq + no) % _FN.length], last_name: _LN[(idSeq * 2 + no) % _LN.length],
           class_level: String(cls), room: String(room), number: String(no),
-          score: startScore, advisor_name: advisors[cls + '/' + room] || ('ครูที่ปรึกษา ม.' + cls + '/' + room),
+          score: 0, late_score: 0, advisor_name: advisors[cls + '/' + room] || ('ครูที่ปรึกษา ม.' + cls + '/' + room),
           status: 'active', note: ''
         });
       }
@@ -112,9 +112,11 @@ function Seed_demoData_() {
       var date = Utilities.formatDate(dayD, APP.TIMEZONE, 'yyyy-MM-dd');
       for (var i = 0; i < samp.length; i++) {
         var s = samp[i];
-        if ((i + d) % 4 === 0) lateRows.push({ id: _genSeq_('L', 0), date: date, time: '07:' + _p2_(30 + (i % 25)),
+        // สลับก่อน/หลังเวลาตัด 08:35 เพื่อให้ตัวอย่างมีทั้งครั้งที่นับหักและไม่นับ
+        if ((i + d) % 4 === 0) { var at = (i % 3 === 0) ? '08:' + _p2_(20 + (i % 15)) : '08:' + _p2_(36 + (i % 20));
+          lateRows.push({ id: _genSeq_('L', 0), date: date, time: at, arrive_time: at, term: _termKey_(map),
           student_id: s.id, reason: lateReasons[i % lateReasons.length], note: '', created_by: teacher.id,
-          created_by_name: teacher.full_name, canceled: 'no' });
+          created_by_name: teacher.full_name, canceled: 'no' }); }
         if ((i + d) % 9 === 0) leaveRows.push({ id: _genSeq_('E', 0), date: date, time: '13:' + _p2_(i % 55),
           student_id: s.id, reason: leaveReasons[i % leaveReasons.length], guardian_name: 'นาง' + _LN[i % _LN.length] + ' ' + _FN[i % _FN.length],
           guardian_phone: '08' + (10000000 + i * 137 % 89999999), relation: relations[i % relations.length], photo_url: '',
@@ -133,6 +135,7 @@ function Seed_demoData_() {
     var bDateStr = Utilities.formatDate(bDate, APP.TIMEZONE, 'yyyy-MM-dd');
     try { Behavior_save(teacher, { student_id: st.id, kind: 'deduct', offense_code: of.code, detail: 'ตัวอย่างข้อมูล', date: bDateStr }); } catch (e) {}
   }
+  Late_recomputeAll_();                        // คะแนนมาสายของตัวอย่างที่ bulk insert (ไม่ผ่าน core)
   return { students: toAdd.length, message: 'เพิ่มข้อมูลตัวอย่างเรียบร้อย' };
 }
 

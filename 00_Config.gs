@@ -15,8 +15,8 @@ var APP = Object.freeze({
   NAME: 'ระบบงานปกครองนักเรียน',
   SHORT: 'SAM',
   TITLE: 'ระบบงานปกครองนักเรียน · Student Affairs',
-  VERSION: '1.0.8',
-  LAST_UPDATED: '2026-07-16',
+  VERSION: '1.1.0',
+  LAST_UPDATED: '2026-09-16',
   ORG: 'โรงเรียนในสังกัด สพฐ.',
   DESCRIPTION: 'ระบบบันทึกมาสาย · ขออนุญาตกลับบ้าน · หักคะแนนความประพฤติ พร้อมรายงานครบวงจร',
   LOGO_ICON: 'shield-check',
@@ -47,10 +47,12 @@ var SCHEMAS = Object.freeze({
   Users: ['id', 'username', 'email', 'full_name', 'password_hash', 'salt', 'role',
           'advisor_class', 'advisor_room', 'phone', 'is_active', 'created_at', 'updated_at'],
   Sessions: ['token', 'user_id', 'created_at', 'expires_at', 'ua'],
+  // score = คะแนนความประพฤติ "สะสม" (เริ่ม 0 นับขึ้น) · late_score = คะแนนมาสายสะสม (แยกก้อน · ต่อภาคเรียน)
   Students: ['id', 'prefix', 'first_name', 'last_name', 'class_level', 'room', 'number',
-             'score', 'advisor_name', 'status', 'note', 'created_at', 'updated_at'],
+             'score', 'advisor_name', 'status', 'note', 'created_at', 'updated_at', 'late_score'],
+  // arrive_time = เวลาที่มาถึงจริง (ครูแก้ได้ · ใช้เทียบเกณฑ์ 08:35) · term = ภาคเรียนที่บันทึก (ปี/เทอม)
   LateRecords: ['id', 'date', 'time', 'student_id', 'reason', 'note',
-                'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
+                'created_by', 'created_by_name', 'canceled', 'created_at', 'rev', 'arrive_time', 'term'],
   LeaveRecords: ['id', 'date', 'time', 'student_id', 'reason', 'guardian_name', 'guardian_phone',
                  'relation', 'photo_url', 'note', 'created_by', 'created_by_name', 'canceled', 'created_at', 'rev'],
   // ★ เพิ่มคอลัมน์ใหม่ "ท้ายตารางเท่านั้น" — DB_ensureSchema_ เขียน header ทับโดยไม่ย้ายข้อมูล
@@ -66,8 +68,8 @@ var SCHEMAS = Object.freeze({
 
 // ── Projection schemas (lite — ตัดคอลัมน์หนักที่ list/report ไม่ใช้) ──
 var SCHEMAS_LITE = Object.freeze({
-  Students: ['id', 'prefix', 'first_name', 'last_name', 'class_level', 'room', 'number', 'score', 'advisor_name', 'status'],
-  LateRecords: ['id', 'date', 'time', 'student_id', 'reason', 'created_by_name', 'canceled'],
+  Students: ['id', 'prefix', 'first_name', 'last_name', 'class_level', 'room', 'number', 'score', 'advisor_name', 'status', 'late_score'],
+  LateRecords: ['id', 'date', 'time', 'student_id', 'reason', 'created_by', 'created_by_name', 'canceled', 'arrive_time', 'term'],
   LeaveRecords: ['id', 'date', 'time', 'student_id', 'reason', 'guardian_name', 'guardian_phone', 'relation', 'photo_url', 'created_by_name', 'canceled'],
   BehaviorRecords: ['id', 'date', 'time', 'student_id', 'kind', 'offense_code', 'offense_name', 'category', 'points', 'score_after', 'ref_id', 'created_by_name', 'canceled']
 });
@@ -75,7 +77,7 @@ var SCHEMAS_LITE = Object.freeze({
 // ── คอลัมน์ที่ต้องบังคับเป็น TEXT (กัน Sheet auto-coerce) ────────
 var TEXT_COLUMNS = Object.freeze([
   'id', 'student_id', 'username', 'phone', 'guardian_phone', 'code', 'offense_code',
-  'value', 'number', 'room', 'date', 'time', 'token', 'password_hash', 'salt', 'ua', 'target'
+  'value', 'number', 'room', 'date', 'time', 'arrive_time', 'term', 'token', 'password_hash', 'salt', 'ua', 'target'
 ]);
 var TIME_COLUMNS = Object.freeze(['time']);
 var DATE_COLUMNS = Object.freeze(['date']);
@@ -101,16 +103,19 @@ var ROLE_GRAD = Object.freeze({
 var SETTINGS_DEFAULTS = Object.freeze({
   org_name: 'โรงเรียนในสังกัด สพฐ.',
   academic_year: '2569',
-  start_score: '100',
-  alert_level_1: '60',
-  alert_level_2: '40',
-  alert_level_3: '20',
+  current_term: '1',                   // ภาคเรียนปัจจุบัน (1/2) — คะแนนมาสายนับใหม่ทุกภาคเรียน
+  // คะแนนความประพฤติ "สะสม" เริ่ม 0 → ถึงเกณฑ์ (มากขึ้น = แย่ลง)
+  alert_level_1: '40',                 // แจ้งผู้ปกครอง
+  alert_level_2: '60',                 // เชิญผู้ปกครอง
+  alert_level_3: '80',                 // พบรองผู้อำนวยการ
+  alert_level_4: '100',                // พบผู้อำนวยการ
+  // คะแนนมาสาย (แยกก้อน) — นับเฉพาะที่มาถึง "หลัง" เวลาตัด · หักตามลำดับครั้งในภาคเรียน
+  late_cutoff_time: '08:35',           // มาถึง 08:36 ขึ้นไปจึงนับเป็นครั้งที่ถูกหัก
+  late_deduct_table: '0,0,5,5,5,5,5,10,10',   // ครั้งที่ 1..9
+  late_deduct_after: '10',             // ครั้งที่ 10 ขึ้นไป หักครั้งละ
   late_reasons: 'ตื่นสาย,รถติด,ธุระส่วนตัว,ตื่นสาย/นอนดึก,ป่วยเล็กน้อย,อื่นๆ',
   leave_reasons: 'ป่วย,ธุระครอบครัว,พบแพทย์,ผู้ปกครองมารับ,อื่นๆ',
   relations: 'บิดา,มารดา,ผู้ปกครอง,ญาติ,อื่นๆ',
-  late_auto_deduct: 'no',
-  late_auto_threshold: '3',
-  late_auto_points: '5',
   theme: 'blue',
   logo_image: '',
   show_demo_users: 'yes',
@@ -121,8 +126,7 @@ var SETTINGS_DEFAULTS = Object.freeze({
   tg_notify_leave: 'yes',
   tg_notify_behavior: 'yes',
   self_service: 'yes',                 // นักเรียนบันทึกมาสาย/ลากลับเองจากหน้าล็อกอิน
-  late_alert_count: '3',               // แจ้งเตือนเมื่อมาสายสะสมครบ N ครั้ง
-  behavior_alert_deducted: '30,50,60'  // แจ้งเตือนเมื่อคะแนนถูกหักสะสมเกินเกณฑ์ (คั่นด้วย ,)
+  late_alert_count: '3'                // แจ้งเตือนเมื่อมาสายสะสมครบ N ครั้ง
 });
 // setting ที่ห้ามส่งให้ client ที่ยังไม่ login (sensitive)
 var SETTINGS_SENSITIVE = Object.freeze(['tg_token', 'tg_admin_chat_ids']);

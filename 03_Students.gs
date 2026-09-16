@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        03_Students.gs — ข้อมูลนักเรียน · lookup บาร์โค้ด · CRUD · import
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -21,12 +21,20 @@ function _canSeeStudent_(user, stu) { var sc = _studentScope_(user); return sc =
 function _stuName_(s) { return s ? (String(s.prefix || '') + String(s.first_name || '') + ' ' + String(s.last_name || '')).trim() : ''; }
 function _stuClassRoom_(s) { return s ? ('ม.' + s.class_level + '/' + s.room) : ''; }
 
+// ระดับเตือนคะแนนความประพฤติสะสม (เรียงจากน้อยไปมาก) — ตั้งค่าได้ · label ตายตัวตามระเบียบ
+function _alertLevels_(map) {
+  return [
+    { level: 1, at: cfg_num_(map.alert_level_1) || 40,  label: 'แจ้งผู้ปกครอง',       tone: 'warn' },
+    { level: 2, at: cfg_num_(map.alert_level_2) || 60,  label: 'เชิญผู้ปกครอง',       tone: 'warn' },
+    { level: 3, at: cfg_num_(map.alert_level_3) || 80,  label: 'พบรองผู้อำนวยการ',    tone: 'danger' },
+    { level: 4, at: cfg_num_(map.alert_level_4) || 100, label: 'พบผู้อำนวยการ',       tone: 'danger' }
+  ];
+}
+// คะแนนสะสม "ถึง" เกณฑ์ไหนสูงสุด → ระดับนั้น (0 = ปกติ)
 function _scoreAlert_(score, map) {
-  var s = cfg_num_(score);
-  if (s <= cfg_num_(map.alert_level_3)) return { level: 3, label: 'ทำทัณฑ์บน', tone: 'danger' };
-  if (s <= cfg_num_(map.alert_level_2)) return { level: 2, label: 'ติดตามใกล้ชิด', tone: 'warn' };
-  if (s <= cfg_num_(map.alert_level_1)) return { level: 1, label: 'เชิญผู้ปกครอง', tone: 'warn' };
-  return { level: 0, label: 'ปกติ', tone: 'ok' };
+  var s = cfg_num_(score), hit = { level: 0, label: 'ปกติ', tone: 'ok', at: 0 };
+  _alertLevels_(map).forEach(function (L) { if (s >= L.at) hit = L; });
+  return hit;
 }
 
 // ── lookup by barcode/id ───────────────────────────────────────
@@ -44,12 +52,19 @@ function Students_lookup(user, p) {
   return {
     student: {
       id: s.id, name: _stuName_(s), prefix: s.prefix, first_name: s.first_name, last_name: s.last_name,
-      class_level: s.class_level, room: s.room, number: s.number, score: cfg_num_(s.score),
+      class_level: s.class_level, room: s.room, number: s.number, score: cfg_num_(s.score), late_score: cfg_num_(s.late_score),
       advisor_name: s.advisor_name, status: s.status
     },
     alert: _scoreAlert_(s.score, map),
+    late: _lateLookupInfo_(id, map),
     late_today: lateToday, leave_today: leaveToday
   };
+}
+
+// สรุปมาสายในภาคเรียนสำหรับ preview ตอนสแกน — ครั้งที่ผ่านมา + ครั้งถัดไปจะหักเท่าไร
+function _lateLookupInfo_(sid, map) {
+  var d = _lateScoreDetail_(sid, map);
+  return { count: d.count, counted: d.counted, score: d.score, next_deduct: d.next, cutoff: cfg_time_(map.late_cutoff_time) || '08:35', term: _termKey_(map) };
 }
 
 // ── list (paginated, scoped, single-pass filter) ───────────────
@@ -71,7 +86,7 @@ function Students_list(user, p) {
     return true;
   });
   rows.sort(function (a, b) {
-    if (sort === 'score') return cfg_num_(a.score) - cfg_num_(b.score);
+    if (sort === 'score') return cfg_num_(b.score) - cfg_num_(a.score);          // คะแนนสะสมมากสุดก่อน (เสี่ยงสุด)
     if (sort === 'name') return _stuName_(a).localeCompare(_stuName_(b), 'th');
     var ka = String(a.class_level).padStart(2, '0') + String(a.room).padStart(2, '0') + String(a.number).padStart(3, '0');
     var kb = String(b.class_level).padStart(2, '0') + String(b.room).padStart(2, '0') + String(b.number).padStart(3, '0');
@@ -80,7 +95,7 @@ function Students_list(user, p) {
   var total = rows.length, start = (page - 1) * per;
   var items = rows.slice(start, start + per).map(function (s) {
     return { id: s.id, name: _stuName_(s), class_level: s.class_level, room: s.room, number: s.number,
-      score: cfg_num_(s.score), advisor_name: s.advisor_name, status: s.status, alert: _scoreAlert_(s.score, map) };
+      score: cfg_num_(s.score), late_score: cfg_num_(s.late_score), advisor_name: s.advisor_name, status: s.status, alert: _scoreAlert_(s.score, map) };
   });
   return { items: items, total: total, page: page, per_page: per, pages: Math.ceil(total / per) };
 }
@@ -129,15 +144,15 @@ function Students_save(user, p) {
   Auth_requireCap(user, 'student.manage');
   var d = _sanitizeStudent_(p), isNew = !!(p && p.is_new);
   if (!d.id) throw new Error('กรุณาระบุรหัสนักเรียน');
-  if (!/^\d{4,6}$/.test(d.id)) throw new Error('รหัสนักเรียนต้องเป็นตัวเลข 4-6 หลัก');
+  if (!/^\d{5}$/.test(d.id)) throw new Error('รหัสนักเรียนต้องเป็นตัวเลข 5 หลัก');
   if (!d.first_name) throw new Error('กรุณากรอกชื่อ');
   if (!d.class_level || !d.room) throw new Error('กรุณาระบุชั้นและห้อง');
-  var map = Settings_map_(), out;
+  var out;
   DB_withLock_(function () {
     var exist = DB_getFresh(SHEETS.STUDENTS, d.id);
     if (isNew) {
       if (exist) throw new Error('รหัสนักเรียน ' + d.id + ' มีอยู่แล้ว');
-      d.score = cfg_num_(map.start_score) || 100;
+      d.score = 0; d.late_score = 0;                                       // เริ่มสะสมจาก 0
       out = DB_insert(SHEETS.STUDENTS, d);
     } else {
       if (!exist) throw new Error('ไม่พบนักเรียนที่จะแก้ไข');
@@ -166,14 +181,13 @@ function Students_import(user, p) {
   var list = _arr_(p && p.rows);
   if (!list.length) throw new Error('ไม่มีข้อมูลนำเข้า');
   if (list.length > 3500) throw new Error('นำเข้าได้สูงสุด 3,500 รายการต่อครั้ง');
-  var map = Settings_map_(), startScore = cfg_num_(map.start_score) || 100;
   var existing = DB_buildIndex(SHEETS.STUDENTS);
   var created = 0, updated = 0, skipped = 0, inserts = [];
   DB_beginBatch();
   try {
     list.forEach(function (r) {
       var id = String((r && r.id) || '').trim();
-      if (!id || !/^\d{4,6}$/.test(id)) { skipped++; return; }
+      if (!id || !/^\d{5}$/.test(id)) { skipped++; return; }        // รหัส 5 หลักเท่านั้น (ตามระเบียบ · ค้นหาอัตโนมัติเมื่อครบ 5)
       var d = _sanitizeStudent_(r);
       if (!d.first_name) { skipped++; return; }
       if (existing[id]) {
@@ -181,7 +195,7 @@ function Students_import(user, p) {
           class_level: d.class_level, room: d.room, number: d.number, advisor_name: d.advisor_name });
         updated++;
       } else {
-        d.score = startScore;
+        d.score = 0; d.late_score = 0;
         inserts.push(d);
         existing[id] = d;
         created++;
@@ -193,14 +207,13 @@ function Students_import(user, p) {
   return { ok: true, created: created, updated: updated, skipped: skipped };
 }
 
-// ── reset scores (new academic year) ───────────────────────────
+// ── reset scores (ขึ้นปีการศึกษาใหม่) — คะแนนความประพฤติ + มาสาย กลับเป็น 0 ทุกคน (ประวัติเก่ายังอยู่) ──
 function Students_resetScores(user, p) {
   Auth_requireCap(user, 'score.reset');
-  var map = Settings_map_(), startScore = cfg_num_(map.start_score) || 100;
   var actives = DB_readAll(SHEETS.STUDENTS).filter(function (s) { return String(s.status) === STU_STATUS.ACTIVE; });
   DB_beginBatch();
-  try { actives.forEach(function (s) { if (cfg_num_(s.score) !== startScore) DB_update(SHEETS.STUDENTS, s.id, { score: startScore }); }); }
+  try { actives.forEach(function (s) { if (cfg_num_(s.score) !== 0 || cfg_num_(s.late_score) !== 0) DB_update(SHEETS.STUDENTS, s.id, { score: 0, late_score: 0 }); }); }
   finally { DB_endBatch(); }
-  Audit_log_(user, 'score.reset', 'student', '', { count: actives.length, start_score: startScore });
+  Audit_log_(user, 'score.reset', 'student', '', { count: actives.length });
   return { ok: true, count: actives.length };
 }

@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        15_Public.gs — self-service สาธารณะ (นักเรียนบันทึกเอง · ไม่ต้องล็อกอิน)
- *  Version:     1.0.3
- *  Last Update: 2026-07-14
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -42,12 +42,15 @@ function Public_lateSubmit(p) {
   var stu = DB_get(SHEETS.STUDENTS, id);
   if (!stu) throw new Error('ไม่พบรหัสนักเรียน');
   if (String(stu.status || 'active') !== 'active') throw new Error('นักเรียนคนนี้ไม่อยู่ในสถานะปกติ');
-  var rec = _lateCreateCore_(stu, {
+  // ใช้ core เดียวกับครู → คะแนนมาสายคำนวณ/หักตามเกณฑ์เหมือนกัน (v1.0.x เคยข้ามการหักเมื่อนักเรียนบันทึกเอง)
+  var out = _lateCreateCore_(stu, {
     reason: cfg_str_(p && p.reason, 60).trim() || 'นักเรียนบันทึกเอง',
-    note: '', date: cfg_today_(), createdBy: 'self', createdByName: PUBLIC_SELF.full_name
+    note: '', date: cfg_today_(), arriveTime: cfg_timeNow_(),      // เวลามาถึง = เวลาที่กดบันทึก (นักเรียนแก้ไม่ได้)
+    createdBy: 'self', createdByName: PUBLIC_SELF.full_name
   });
-  Audit_log_(PUBLIC_SELF, 'late.self', 'late', rec.id, { student_id: id });
-  return { ok: true, student_name: _stuName_(stu), time: String(rec.time || '').slice(0, 5) };
+  Audit_log_(PUBLIC_SELF, 'late.self', 'late', out.record.id, { student_id: id, deduct: out.late.deduct });
+  // ไม่เปิดคะแนนสะสมให้สาธารณะ — บอกแค่ครั้งนี้ถูกหักหรือไม่ (นักเรียนควรรู้)
+  return { ok: true, student_name: _stuName_(stu), time: String(out.record.time || '').slice(0, 5), deduct: out.late.deduct, counted: out.late.counted_this };
 }
 
 // นักเรียนยื่นขออนุญาตกลับบ้านเอง — จำกัด 2 ครั้ง/วัน · แจ้งครูให้ตรวจสอบ

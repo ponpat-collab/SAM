@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  _audit.sh — Pre-deploy Audit Gate · 31 ด่าน (บังคับรันก่อน deploy ทุกครั้ง)
+#  _audit.sh — Pre-deploy Audit Gate · 36 ด่าน (บังคับรันก่อน deploy ทุกครั้ง)
 #  Version 1.1.0 · 2026-07-10 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
 #  Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น
 # ───────────────────────────────────────────────────────────────
@@ -406,6 +406,17 @@ if git rev-parse --verify HEAD >/dev/null 2>&1 && git cat-file -e HEAD:00_Config
   git show HEAD:00_Config.gs > /tmp/_sch_old.gs 2>/dev/null
   node tests/schema_guard.js /tmp/_sch_old.gs 00_Config.gs || FAIL=1
 else echo "  ⚠ ไม่มี git baseline — ข้ามด่านนี้"; fi
+
+# ── 36) e2e harness ต้องรันจริง + ไม่มีไฟล์ทดสอบกำพร้า (เทสต์ที่ไม่มีด่านเรียก = คนคิดว่ามีคนดูแล) ──
+echo "─36) e2e backend harness (รัน .gs จริงผ่าน api() · ทุกบทบาท) + orphan test"
+if node tests/harness.js 2>/tmp/_h_err | tail -1 | grep -q "FAIL 0"; then echo "  ✓ tests/harness.js ผ่าน ($(node tests/harness.js 2>/dev/null | tail -1 | sed 's/.*PASS //'))"
+else echo "  ✗ tests/harness.js ไม่ผ่าน — รัน: node tests/harness.js"; FAIL=1; fi
+if [ -d /tmp/samjsdom/node_modules/jsdom ]; then
+  if node tests/client_harness.js 2>/dev/null | tail -1 | grep -q "FAIL 0"; then echo "  ✓ tests/client_harness.js ผ่าน"; else echo "  ✗ tests/client_harness.js ไม่ผ่าน"; FAIL=1; fi
+else echo "  ⚠ jsdom ยังไม่ติดตั้ง (mkdir -p /tmp/samjsdom && cd /tmp/samjsdom && npm i jsdom@24) — client harness ยังไม่ได้ตรวจ"; FAIL=1; fi
+ORPHAN=""
+for f in tests/*.js tests/*.py; do [ -f "$f" ] || continue; b=$(basename "$f"); case "$b" in _*) continue;; esac; grep -q "$b" _audit.sh tests/client_harness.js || ORPHAN="$ORPHAN $b"; done
+if [ -n "$ORPHAN" ]; then echo "  ✗ เทสต์ที่ไม่มีด่านไหนเรียก:$ORPHAN"; FAIL=1; else echo "  ✓ ไม่มีเทสต์กำพร้า"; fi
 
 echo "════════════════════════════════════════"
 if [ $FAIL -eq 0 ]; then

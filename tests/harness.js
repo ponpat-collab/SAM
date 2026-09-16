@@ -67,7 +67,7 @@ var indirectEval = eval;
 try { indirectEval(src); } catch (e) { console.error('LOAD FAIL:', e.message); process.exit(1); }
 var G = (function () { return this; })() || globalThis;
 ['DB_initAllSchemas', 'Settings_ensureDefaults_', 'Seed_ensureUsers_', 'Seed_ensureOffenses_', 'DB_rowCount', 'SHEETS', 'Auth_login', '_dispatch_', 'DB_get',
- 'SCHEMAS', 'DB_ensureSchema_', '_bumpVer_', 'Behavior_repairShift_'].forEach(function (n) { if (typeof G[n] !== 'undefined') global[n] = G[n]; });
+ 'SCHEMAS', 'DB_ensureSchema_', '_bumpVer_', 'Behavior_repairShift_', 'DB_insert', 'Utilities'].forEach(function (n) { if (typeof G[n] !== 'undefined') global[n] = G[n]; });
 
 // ── run scenario ──
 var pass = 0, fail = 0;
@@ -95,7 +95,8 @@ ok(boot.me && boot.caps.length > 0, 'bootstrap has me+caps');
 
 // add students
 var s1 = api('student.save', adminTok, { is_new: true, id: '40001', prefix: 'เด็กชาย', first_name: 'ทดสอบ', last_name: 'ระบบ', class_level: '3', room: '1', number: '1', advisor_name: 'ครูเอ' });
-ok(s1.ok && s1.student.score === 100, 'add student score=100');
+ok(s1.ok && s1.student.score === 0 && s1.student.late_score === 0, 'add student score=0 · late_score=0 (สะสมเริ่ม 0)');
+try { api('student.save', adminTok, { is_new: true, id: '4001', first_name: 'สี่หลัก', last_name: 'x', class_level: '3', room: '1', number: '9' }); ok(false, 'รหัส 4 หลักต้องถูกปฏิเสธ'); } catch (e) { ok(/5 หลัก/.test(e.message), 'รหัสนักเรียนต้อง 5 หลัก (4 หลักถูกปฏิเสธ)'); }
 api('student.save', adminTok, { is_new: true, id: '40002', first_name: 'สอง', last_name: 'สาม', class_level: '3', room: '2', number: '2', advisor_name: 'ครูบี' });
 // import
 var imp = api('student.import', adminTok, { rows: [{ id: '40003', first_name: 'นำเข้า', last_name: 'หนึ่ง', class_level: '4', room: '1', number: '3' }, { id: '40001', first_name: 'ทดสอบแก้', last_name: 'ระบบ', class_level: '3', room: '1', number: '1' }] });
@@ -106,8 +107,8 @@ var lk = api('student.lookup', adminTok, { id: '40001' });
 ok(lk.student.name.indexOf('ทดสอบแก้') >= 0, 'lookup updated name');
 
 // late
-var lt = api('late.save', adminTok, { student_id: '40001', reason: 'รถติด' });
-ok(lt.ok, 'late saved');
+var lt = api('late.save', adminTok, { student_id: '40001', reason: 'รถติด', arrive_time: '08:40' });
+ok(lt.ok && lt.late && lt.late.counted === 1 && lt.late.deduct === 0, 'late saved · หลัง 08:35 ครั้งที่ 1 ยังไม่หัก');
 try { api('late.save', adminTok, { student_id: '40001', reason: 'ตื่นสาย' }); ok(false, 'late dup should hard-block'); } catch (e) { ok(/ซ้ำในวันเดียวกัน/.test(e.message), 'late dup hard-blocked (ห้ามซ้ำวันเดียวกัน)'); }
 var lateList = api('late.list', adminTok, {});
 ok(lateList.total >= 1, 'late list total>=1');
@@ -119,19 +120,19 @@ try { api('leave.save', adminTok, { student_id: '40002', reason: 'ป่วย',
 
 // behavior deduct + score
 var bh = api('behavior.save', adminTok, { student_id: '40001', kind: 'deduct', offense_code: 'B06', points_override: false });
-ok(bh.score_after === 60, 'behavior deduct B06(-40) → 60');
-ok(bh.alert.level === 1, 'alert level1 at 60');
+ok(bh.score_after === 40, 'behavior deduct B06(40) → สะสม 40');
+ok(bh.alert.level === 1 && /แจ้งผู้ปกครอง/.test(bh.alert.label), 'สะสมถึง 40 → ระดับ 1 แจ้งผู้ปกครอง');
 var stu = DB_get(SHEETS.STUDENTS, '40001');
-ok(Number(stu.score) === 60, 'student score persisted 60');
-// add good deed
+ok(Number(stu.score) === 40, '★★ student score persisted 40 (DB ตรงกับ response)');
+// add good deed → ลดยอดสะสม
 var bg = api('behavior.save', adminTok, { student_id: '40001', kind: 'add', offense_name: 'ทำความดี', points: 10 });
-ok(bg.score_after === 70, 'add 10 → 70');
+ok(bg.score_after === 30 && bg.alert.level === 0, 'ทำความดี 10 → สะสม 30 · กลับเป็นปกติ');
 // cancel behavior restores
 var behList = api('behavior.list', adminTok, {});
 var firstBeh = behList.items.filter(function (r) { return r.kind === 'deduct'; })[0];
 api('behavior.cancel', adminTok, { id: firstBeh.id });
 var stu2 = DB_get(SHEETS.STUDENTS, '40001');
-ok(Number(stu2.score) === 110 || Number(stu2.score) === 100, 'cancel deduct restores (clamped): ' + stu2.score);
+ok(Number(stu2.score) === 0, 'cancel deduct → สะสมกลับ 0 (ความดี 10 ไม่ทำให้ติดลบ): ' + stu2.score);
 
 // เพิ่มมาสายอีกคน (วันนี้) ให้ยอดวันนี้ >= 2 (40001 + 40008) — 40002 เว้นไว้ให้ public test
 api('student.save', adminTok, { is_new: true, id: '40008', prefix: 'เด็กหญิง', first_name: 'สอง', last_name: 'คน', class_level: '3', room: '1', number: '8', advisor_name: 'ครูเอ' });
@@ -229,34 +230,69 @@ var lateAlert = api('notify.list', adminTok, {}).items;
 ok(lateAlert.length > beforeN && lateAlert.some(function (n) { return /มาสายสะสมครบ/.test(n.title); }), 'late frequency alert (ครบ 3) แจ้งเตือน');
 
 // ── NEW: หักคะแนนสะสมข้ามเกณฑ์ 30 → แจ้งเตือน (40001 ถูกหัก 40 → คงเหลือ 60) ──
-ok(api('notify.list', adminTok, {}).items.some(function (n) { return /หักเกิน 30/.test(n.title); }), 'behavior deduct alert (เกิน 30) แจ้งเตือน');
+ok(api('notify.list', adminTok, {}).items.some(function (n) { return /ถึง 40/.test(n.title) && /แจ้งผู้ปกครอง/.test(n.title); }), 'behavior alert (สะสมถึง 40 → แจ้งผู้ปกครอง) แจ้งเตือน');
 
-// ── NEW: หักอัตโนมัติจากมาสาย = รายการจริง + ยกเลิกมาสาย → คืนคะแนน (เคสลูกค้า: คะแนนไม่กลับ 100) ──
-api('setting.update', adminTok, { settings: { late_auto_deduct: 'yes', late_auto_threshold: '3', late_auto_points: '5' } });
+// ── v1.1.0: คะแนนมาสายแยกก้อน · ตารางหักตามลำดับครั้ง · เวลาตัด 08:35 · ต่อภาคเรียน ──
 api('student.save', adminTok, { is_new: true, id: '40011', prefix: 'เด็กชาย', first_name: 'ออโต้', last_name: 'สาย', class_level: '3', room: '1', number: '11', advisor_name: 'ครูเอ' });
-var startScore = Number(api('setting.get', adminTok, {}).settings.start_score) || 100;
-api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-13' });   // จันทร์
-api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-14' });
-var autoRes = api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-15' });   // ครั้งที่ 3 ของสัปดาห์ → หักอัตโนมัติ
-ok(autoRes.auto && autoRes.auto.deducted === true && autoRes.auto.points === 5, 'มาสายครบ 3/สัปดาห์ → หักอัตโนมัติ 5 คะแนน');
-var stuAuto = api('student.lookup', adminTok, { id: '40011' }).student;
-ok(Number(stuAuto.score) === startScore - 5, 'คะแนนหลังหักอัตโนมัติ = ' + (startScore - 5));
-var autoRec = api('behavior.list', adminTok, { student_id: '40011' }).items;
-ok(autoRec.length === 1 && autoRec[0].auto === true, 'หักอัตโนมัติสร้าง "รายการหักคะแนน" จริง (เห็น/ยกเลิกได้)');
-// ยกเลิกรายการมาสายที่ทำให้ครบเกณฑ์ → รายการหักถูกยกเลิก + คะแนนกลับเต็ม
-api('late.cancel', adminTok, { id: autoRes.record.id });
-ok(Number(api('student.lookup', adminTok, { id: '40011' }).student.score) === startScore, 'ยกเลิกมาสาย → คืนคะแนนอัตโนมัติ กลับเป็น ' + startScore);
-ok(api('behavior.list', adminTok, { student_id: '40011', include_canceled: true }).items[0].canceled === true, 'รายการหักอัตโนมัติถูกยกเลิกตามรายการมาสาย');
+var seq = [
+  ['2026-07-13', '08:35', 0, 0, 0],   // พอดี 08:35 → ไม่นับ (ต้องหลัง 08:35)
+  ['2026-07-14', '08:36', 1, 0, 0],   // ครั้งที่ 1 ไม่หัก
+  ['2026-07-15', '09:00', 2, 0, 0],   // ครั้งที่ 2 ไม่หัก
+  ['2026-07-16', '08:40', 3, 5, 5],   // ครั้งที่ 3 หัก 5
+  ['2026-07-17', '08:40', 4, 5, 10],
+  ['2026-07-20', '08:40', 5, 5, 15],
+  ['2026-07-21', '08:40', 6, 5, 20],
+  ['2026-07-22', '08:40', 7, 5, 25],
+  ['2026-07-23', '08:40', 8, 10, 35], // ครั้งที่ 8 หัก 10
+  ['2026-07-24', '08:40', 9, 10, 45],
+  ['2026-07-27', '08:40', 10, 10, 55] // เกินตาราง → late_deduct_after 10
+];
+var seqOk = true, lastRes = null;
+seq.forEach(function (x) {
+  var r = api('late.save', adminTok, { student_id: '40011', reason: 'a', date: x[0], arrive_time: x[1] });
+  lastRes = r;
+  if (!(r.late.rank === x[2] && r.late.deduct === x[3] && r.late.score === x[4])) { seqOk = false; console.log('    ลำดับผิด @' + x[0] + ' got rank=' + r.late.rank + ' deduct=' + r.late.deduct + ' score=' + r.late.score); }
+});
+ok(seqOk, 'ตารางหักมาสาย 1-2 ไม่หัก · 3-7 หัก 5 · 8+ หัก 10 · เกินตาราง 10 · พอดีเวลาตัดไม่นับ');
+ok(lastRes.late.count === 11 && lastRes.late.counted === 10, 'นับทุกครั้งในสถิติ (11) แต่ครั้งที่ถูกหักเฉพาะหลังเวลาตัด (10)');
+ok(Number(DB_get(SHEETS.STUDENTS, '40011').late_score) === 55, '★★ late_score persisted 55 (DB ตรงกับ response)');
+ok(Number(DB_get(SHEETS.STUDENTS, '40011').score) === 0, '★★ คะแนนความประพฤติไม่ถูกแตะ (แยกก้อน) = 0');
+ok(api('notify.list', adminTok, {}).items.some(function (n) { return /หักคะแนนมาสาย 5/.test(n.title); }), 'แจ้งครูเมื่อคะแนนมาสายถูกหัก');
+// ยกเลิกครั้งที่ 3 (2026-07-16) → ลำดับขยับ: เดิม 10 ครั้ง → 9 ครั้ง = 0+0+5+5+5+5+5+10+10 = 45
+var l16 = api('late.list', adminTok, { student_id: '40011', from: '2026-07-16', to: '2026-07-16' }).items[0];
+ok(l16 && l16.deduct === 5 && l16.rank === 3, 'late.list แสดง rank/deduct ต่อรายการ');
+var cnl = api('late.cancel', adminTok, { id: l16.id });
+ok(cnl.late_score === 45 && Number(DB_get(SHEETS.STUDENTS, '40011').late_score) === 45, 'ยกเลิกรายการกลาง → ลำดับขยับ คะแนนมาสาย 55 → 45');
+// ครูบันทึกย้อนหลังแก้เวลามาถึงได้ · ก่อนเวลาตัดไม่นับหัก
+var early = api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-07-28', arrive_time: '08:10' });
+ok(early.late.deduct === 0 && early.late.rank === 0 && early.late.score === 45 && early.late.count === 11, 'มาสายก่อนเวลาตัด → บันทึก+นับสถิติ แต่ไม่หัก');
+// นักเรียนบันทึกเอง (public) → หักตามเกณฑ์เดียวกัน (เคสลูกค้า: v1.0.x ไม่หัก)
+var _rt = Utilities.formatDate; Utilities.formatDate = function (d, tz, f) { if (f === 'HH:mm') return '09:15'; if (f === 'yyyy-MM-dd') return '2026-07-29'; return _rt(d, tz, f); };
+var selfRes = api('public.late_submit', '', { student_id: '40011', reason: 'ตื่นสาย' });
+Utilities.formatDate = _rt;
+ok(selfRes.ok && selfRes.deduct === 10 && selfRes.counted === true, 'นักเรียนบันทึกเอง → หักตามเกณฑ์เดียวกับครู (ครั้งที่ 10 หัก 10)');
+ok(Number(DB_get(SHEETS.STUDENTS, '40011').late_score) === 55, '★★ late_score หลัง self-submit = 55');
+ok(selfRes.late_score === undefined && selfRes.score === undefined, 'public ไม่เปิดคะแนนสะสม');
+// ขึ้นภาคเรียนใหม่ → นับใหม่ · รายการเก่ายังอยู่
+var tn = api('term.next', adminTok, {});
+ok(tn.ok && tn.current_term === '2', 'term.next → ภาคเรียนที่ 2');
+ok(Number(DB_get(SHEETS.STUDENTS, '40011').late_score) === 0, 'คะแนนมาสายเริ่มนับใหม่ = 0');
+ok(api('late.list', adminTok, { student_id: '40011' }).total === 12, 'รายการมาสายเก่ายังอยู่ (12)');
+var t2 = api('late.save', adminTok, { student_id: '40011', reason: 'a', date: '2026-11-02', arrive_time: '08:50' });
+ok(t2.late.rank === 1 && t2.late.deduct === 0 && t2.late.count === 1, 'ภาคเรียนใหม่นับครั้งที่ 1 ใหม่');
+try { api('term.next', teacherTok, {}); ok(false, 'teacher ห้ามขึ้นภาคเรียน'); } catch (e) { ok(/สิทธิ์/.test(e.message), 'term.next ต้อง setting.manage'); }
 
-// ── NEW: ยกเลิกรายการหักคะแนนหลังชนพื้น 0 → คะแนนต้องคำนวณใหม่ให้ถูก (ไม่เพี้ยนจาก clamp) ──
+// ── ยกเลิกรายการหักหลังชนพื้น 0 (ทำความดีเกินยอด) → คำนวณใหม่ถูก ──
 api('student.save', adminTok, { is_new: true, id: '40012', prefix: 'เด็กชาย', first_name: 'ชน', last_name: 'ศูนย์', class_level: '3', room: '1', number: '12', advisor_name: 'ครูเอ' });
 var big1 = api('behavior.save', adminTok, { student_id: '40012', kind: 'deduct', offense_name: 'หนัก1', points: 80, points_override: true });
 var big2 = api('behavior.save', adminTok, { student_id: '40012', kind: 'deduct', offense_name: 'หนัก2', points: 80, points_override: true });
-ok(big2.score_after === 0, 'หักเกินพื้น → คะแนน clamp ที่ 0');
-api('behavior.cancel', adminTok, { id: big2.record.id });
-ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === startScore - 80, 'ยกเลิกรายการที่ชน 0 → คะแนนคำนวณใหม่ถูก (' + (startScore - 80) + ') ไม่เพี้ยน');
-api('behavior.cancel', adminTok, { id: big1.record.id });
-ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === startScore, 'ยกเลิกครบทุกรายการ → คะแนนกลับเต็ม ' + startScore);
+ok(big2.score_after === 160 && big2.alert.level === 4, 'สะสมเกิน 100 แสดงตามจริง (160) · ระดับ 4 พบผู้อำนวยการ');
+var good = api('behavior.save', adminTok, { student_id: '40012', kind: 'add', offense_name: 'ความดี', points: 200 });
+ok(good.score_after === 0, 'ทำความดีเกินยอด → พื้น 0');
+api('behavior.cancel', adminTok, { id: good.record.id });
+ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === 160, 'ยกเลิกความดีที่ชนพื้น 0 → คำนวณใหม่ถูก (160) ไม่เพี้ยน');
+api('behavior.cancel', adminTok, { id: big1.record.id }); api('behavior.cancel', adminTok, { id: big2.record.id });
+ok(Number(api('student.lookup', adminTok, { id: '40012' }).student.score) === 0, 'ยกเลิกครบทุกรายการ → สะสมกลับ 0');
 
 // ── NEW: student.save ห้ามให้ client แก้คะแนนตรง ๆ (คะแนนมาจากรายการเท่านั้น) ──
 var sc40001 = Number(api('student.lookup', adminTok, { id: '40001' }).student.score);
@@ -287,16 +323,18 @@ ok(Number(api('student.lookup', adminTok, { id: '40001' }).student.score) === sc
   ok(Behavior_repairShift_().fixed === 0, 'repairShift รันซ้ำ = no-op (idempotent)');
 })();
 
-// ── NEW: คำนวณคะแนนใหม่ทั้งระบบ (ซ่อมคะแนนที่เพี้ยน) ──
+// ── คำนวณคะแนนใหม่ทั้งระบบ (ความประพฤติ + มาสาย) + AUTO เก่าถูกยกเลิก ──
 api('student.save', adminTok, { is_new: true, id: '40013', prefix: 'เด็กหญิง', first_name: 'คะแนน', last_name: 'เพี้ยน', class_level: '3', room: '1', number: '13', advisor_name: 'ครูเอ' });
 api('behavior.save', adminTok, { student_id: '40013', kind: 'deduct', offense_name: 'ทดสอบ', points: 25, points_override: true });
-ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === startScore - 25, 'หัก 25 → ' + (startScore - 25));
-api('student.reset_scores', adminTok, {});     // ทุกคน = start → 40013 เพี้ยน (มีรายการหักค้างอยู่)
-ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === startScore, 'reset_scores → คะแนนเป็น ' + startScore + ' (ยังไม่ตรงกับรายการ)');
+ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === 25, 'หัก 25 → สะสม 25');
+api('student.reset_scores', adminTok, {});     // ทุกคน = 0 → 40013 เพี้ยน (มีรายการหักค้างอยู่)
+ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === 0 && Number(api('student.lookup', adminTok, { id: '40011' }).student.late_score) === 0, 'reset_scores → ความประพฤติ + มาสาย = 0');
+// จำลอง AUTO record ของ v1.0.x (หักจากมาสายในก้อนความประพฤติ) — ต้องไม่ถูกนับซ้ำ
+DB_insert(SHEETS.BEHAVIOR, { id: 'BAUTO1', date: '2026-07-01', time: '08:00', student_id: '40013', kind: 'deduct', offense_code: 'AUTO', offense_name: 'มาสายเกินกำหนด', category: 'การมาเรียน', detail: '', points: -5, score_after: 0, photo_url: '', created_by: 'x', created_by_name: 'x', canceled: 'no', ref_id: 'L0' });
 var rc = api('behavior.recompute', adminTok, {});
-ok(rc.ok && rc.fixed >= 1, 'behavior.recompute ซ่อมคะแนนที่ไม่ตรง (' + rc.fixed + ' คน)');
-ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === startScore - 25, 'คะแนนถูกคำนวณกลับจากรายการจริง = ' + (startScore - 25));
-api('setting.update', adminTok, { settings: { late_auto_deduct: 'no' } });
+ok(rc.ok && rc.fixed >= 1 && rc.auto_retired === 1, 'behavior.recompute ซ่อมคะแนน (' + rc.fixed + ' คน) + ยกเลิก AUTO เก่า 1 รายการ');
+ok(Number(api('student.lookup', adminTok, { id: '40013' }).student.score) === 25, 'สะสมคำนวณกลับจากรายการจริง = 25 (ไม่นับ AUTO)');
+ok(Number(api('student.lookup', adminTok, { id: '40011' }).student.late_score) === 0, 'มาสายภาคเรียน 2 ยังคำนวณใหม่ถูก (ครั้งที่ 1 = 0)');
 
 // logout
 api('auth.logout', adminTok, {});

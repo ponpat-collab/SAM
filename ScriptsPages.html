@@ -39,7 +39,7 @@
       p.innerHTML =
         hero({ i: 'shield-check', t: TH.dateWeekday(d.date) }, greeting() + ' · คุณ' + u.full_name.replace(/^(นาย|นาง|นางสาว)/, ''), 'ภาพรวมงานปกครองประจำวันของ' + (Store.boot.app.org || 'โรงเรียน'), kpis) +
         (quick ? '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-lightning-charge-fill"></i></div><div class="pt">เมนูด่วน</div></div><div class="app-grid">' + quick + '</div></div>' : '') +
-        (d.at_risk.length ? '<div class="panel" style="border-left:4px solid var(--danger)"><div class="panel-h"><div class="pi" style="background:#fef2f2;color:#dc2626"><i class="bi bi-exclamation-octagon-fill"></i></div><div class="pt">นักเรียนคะแนนต่ำกว่าเกณฑ์</div><div class="right"><span class="badge b-danger">' + d.at_risk.length + ' คน</span></div></div>' +
+        (d.at_risk.length ? '<div class="panel" style="border-left:4px solid var(--danger)"><div class="panel-h"><div class="pi" style="background:#fef2f2;color:#dc2626"><i class="bi bi-exclamation-octagon-fill"></i></div><div class="pt">นักเรียนคะแนนสะสมถึงเกณฑ์</div><div class="right"><span class="badge b-danger">' + d.at_risk.length + ' คน</span></div></div>' +
           '<div class="stu-grid">' + d.at_risk.slice(0, 8).map(function (s) { return riskCard(s); }).join('') + '</div></div>' : '') +
         '<div class="grid-2c"><div class="chart-card"><div class="chart-h"><i class="bi bi-graph-up"></i> แนวโน้ม 7 วัน (มาสาย/ลากลับ)</div>' + trend +
           '<div class="legend"><span class="lg-i"><span class="lg-d" style="background:#2563eb"></span> มาสาย</span><span class="lg-i"><span class="lg-d" style="background:#0ea5e9"></span> ลากลับ</span></div></div>' +
@@ -52,8 +52,8 @@
   }
   function statMini(icon, grad, val, lb) { return '<div class="stat"><div class="stat-ic ' + grad + '"><i class="bi bi-' + icon + '"></i></div><div class="stat-val">' + fmt.num(val) + '</div><div class="stat-lb">' + esc(lb) + '</div></div>'; }
   function riskCard(s) {
-    var col = A.scoreColor(s.score, Store.boot.settings.start_score);
-    return '<div class="stu-card" data-sid="' + esc(s.id) + '"><div class="top"><div class="avatar">' + esc(fmt.initials(s.name)) + '</div><div style="flex:1;min-width:0"><div class="nm">' + esc(s.name) + '</div><div class="meta">' + esc(s.class_room) + ' · ' + esc(s.id) + '</div></div>' + A.alertBadge(s.alert) + '</div>' +
+    var col = A.scoreColor(s.score);
+    return '<div class="stu-card" data-sid="' + esc(s.id) + '"><div class="top"><div class="avatar">' + esc(fmt.initials(s.name)) + '</div><div style="flex:1;min-width:0"><div class="nm">' + esc(s.name) + '</div><div class="meta">' + esc(s.class_room) + ' · ' + esc(s.id) + ' · มาสาย ' + (s.late_score || 0) + '</div></div>' + A.alertBadge(s.alert) + '</div>' +
       '<div class="sc-score"><div class="sc-bar"><div class="sc-fill" style="width:' + Math.min(100, s.score) + '%;background:' + col + '"></div></div><div class="sc-num" style="color:' + col + '">' + s.score + '</div></div></div>';
   }
   function feedPanel(title, icon, grad, items, kind) {
@@ -66,7 +66,7 @@
   function behaviorFeed(items) {
     return '<div class="feed">' + items.slice(0, 12).map(function (r) {
       var neg = r.points < 0;
-      return '<div class="fi"><div class="fic ' + (neg ? 'g-rose' : 'g-emerald') + '"><i class="bi bi-' + (neg ? 'dash-lg' : 'plus-lg') + '"></i></div><div class="fb"><div class="ft">' + esc(r.name) + ' · ' + esc(r.offense_name) + '</div><div class="fm">' + esc(r.class_room) + ' · โดย ' + esc(r.by) + '</div></div><div class="fr"><span class="pts-chip ' + (neg ? 'pts-neg' : 'pts-pos') + '">' + (neg ? '' : '+') + r.points + '</span><div style="font-size:11px;color:#94a3b8">เหลือ ' + r.score_after + '</div></div></div>';
+      return '<div class="fi"><div class="fic ' + (neg ? 'g-rose' : 'g-emerald') + '"><i class="bi bi-' + (neg ? 'dash-lg' : 'plus-lg') + '"></i></div><div class="fb"><div class="ft">' + esc(r.name) + ' · ' + esc(r.offense_name) + '</div><div class="fm">' + esc(r.class_room) + ' · โดย ' + esc(r.by) + '</div></div><div class="fr"><span class="pts-chip ' + (neg ? 'pts-neg' : 'pts-pos') + '">' + (neg ? '' : '+') + r.points + '</span><div style="font-size:11px;color:#94a3b8">สะสม ' + r.score_after + '</div></div></div>';
     }).join('') + '</div>';
   }
   function quickActions() {
@@ -156,18 +156,23 @@
     p.innerHTML =
       hero({ i: cfg.icon, t: cfg.pill }, cfg.title, cfg.sub, null) +
       '<div class="scan-wrap"><form class="scan-box" id="scan-form" autocomplete="off"><div class="lbl"><i class="bi bi-upc-scan"></i> ยิงบาร์โค้ด หรือพิมพ์รหัสนักเรียนแล้วกด Enter / ค้นหา</div>' +
-        '<div class="scan-row"><input class="scan-input" id="scan-input" inputmode="numeric" enterkeyhint="search" autocomplete="off" placeholder="เช่น 30001"><button type="submit" class="scan-go" aria-label="ค้นหา"><i class="bi bi-search"></i></button></div></form>' +
+        '<div class="scan-row"><input class="scan-input" id="scan-input" inputmode="numeric" enterkeyhint="search" autocomplete="off" maxlength="5" pattern="[0-9]*" placeholder="รหัส 5 หลัก เช่น 30001"><button type="submit" class="scan-go" aria-label="ค้นหา"><i class="bi bi-search"></i></button></div></form>' +
         '<div class="stu-preview" id="scan-preview"></div>' +
         '<div class="scan-feed" id="scan-feed"></div></div>';
     var inp = $('#scan-input'), frm = $('#scan-form'), autoT = null;
     setTimeout(function () { try { inp.focus(); } catch (e) {} }, 100);
-    function go() { if (autoT) { clearTimeout(autoT); autoT = null; } doLookup(inp.value.trim(), cfg); }
+    function go() {
+      if (autoT) { clearTimeout(autoT); autoT = null; }
+      var v = inp.value.trim(); if (!v) return;
+      if (!/^\d{5}$/.test(v)) { toast('กรุณากรอกรหัสนักเรียนให้ครบ 5 หลัก', 'warning'); return; }   // ★ ล็อก 5 หลัก
+      doLookup(v, cfg);
+    }
     frm.addEventListener('submit', function (e) { e.preventDefault(); go(); });                 // ★ มือถือ: ปุ่ม "ค้นหา/Go" ยิง submit เสมอ
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
-    inp.addEventListener('input', function () {                                                 // ★ auto-lookup เมื่อพิมพ์ครบ (กัน Enter บนมือถือไม่ทำงาน + รองรับบาร์โค้ด)
+    inp.addEventListener('input', function () {                                                 // ★ auto-lookup เมื่อครบ 5 หลักพอดี (กัน Enter บนมือถือไม่ทำงาน + รองรับบาร์โค้ด)
       if (autoT) clearTimeout(autoT);
-      var v = inp.value.trim();
-      if (v.length >= 4 && /^\d+$/.test(v)) autoT = setTimeout(go, 650);
+      var v = inp.value.replace(/\D/g, '').slice(0, 5); if (v !== inp.value) inp.value = v;
+      if (v.length === 5) autoT = setTimeout(go, 250);
     });
     renderFeed();
   }
@@ -185,8 +190,9 @@
   function previewHead(d) {
     var s = d.student;
     return '<div class="sp-head"><div class="av">' + esc(fmt.initials(s.name)) + '</div><div style="flex:1"><div class="nm">' + esc(s.name) + '</div><div class="meta">ม.' + esc(s.class_level) + '/' + esc(s.room) + ' เลขที่ ' + esc(s.number) + ' · รหัส ' + esc(s.id) + '</div></div>' + A.alertBadge(d.alert) + '</div>' +
-      '<div class="sp-stats"><div class="sp-stat"><div class="v" style="color:' + A.scoreColor(s.score, Store.boot.settings.start_score) + '">' + s.score + '</div><div class="l">คะแนนคงเหลือ</div></div>' +
-      '<div class="sp-stat"><div class="v">' + d.late_today + '</div><div class="l">มาสายวันนี้</div></div>' +
+      '<div class="sp-stats"><div class="sp-stat"><div class="v" style="color:' + A.scoreColor(s.score) + '">' + s.score + '</div><div class="l">คะแนนความประพฤติสะสม</div></div>' +
+      '<div class="sp-stat"><div class="v" style="color:' + A.lateColor(s.late_score || 0) + '">' + (s.late_score || 0) + '</div><div class="l">คะแนนมาสายสะสม</div></div>' +
+      '<div class="sp-stat"><div class="v">' + (d.late ? d.late.count : 0) + '</div><div class="l">มาสายภาคเรียนนี้</div></div>' +
       '<div class="sp-stat"><div class="v">' + d.leave_today + '</div><div class="l">ลากลับวันนี้</div></div></div>';
   }
   function renderPreview(d, cfg) {
@@ -247,24 +253,34 @@
       kind: 'late', icon: 'clock-history', pill: 'บันทึกการมาสาย', title: 'บันทึกมาสาย', sub: 'ยิงบาร์โค้ดหรือพิมพ์รหัสนักเรียน · ระบบบันทึกเวลาและผู้บันทึกอัตโนมัติ', reasons: reasons,
       body: function () {
         return '<div class="md-section"><div class="st"><i class="bi bi-list-check"></i> เลือกสาเหตุที่มาสาย</div>' + reasonGrid(reasons, SCAN.reason) + '</div>' +
-          '<div class="field"><label>หมายเหตุ (ถ้ามี)</label><input class="input" id="late-note" placeholder="รายละเอียดเพิ่มเติม"></div>' +
+          '<div class="grid-2" style="gap:12px"><div class="field"><label>เวลาที่มาถึง <span class="req">*</span></label><input class="input" type="time" id="late-arrive" value="' + esc(TH.time(new Date()).slice(0, 5)) + '"></div>' +
+          '<div class="field"><label>หมายเหตุ (ถ้ามี)</label><input class="input" id="late-note" placeholder="รายละเอียดเพิ่มเติม"></div></div>' +
+          lateRuleHint(d) +
           '<button class="btn btn-primary btn-block btn-lg" id="late-save"><i class="bi bi-check2-circle"></i> บันทึกการมาสาย</button>';
       },
       wire: function (pv, d) {
         wireReasons(pv);
         $('#late-save', pv).addEventListener('click', function (ev) {
-          var note = $('#late-note', pv).value, rs = scanReason(pv);
+          var note = $('#late-note', pv).value, rs = scanReason(pv), at = $('#late-arrive', pv).value;
           if (rs === null) return;
-          A.runBtn(ev.currentTarget, function () { return saveLate(d.student.id, rs, note); }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
+          if (!/^\d{2}:\d{2}$/.test(at)) { toast('กรุณาระบุเวลาที่มาถึง', 'warning'); return; }
+          A.runBtn(ev.currentTarget, function () { return saveLate(d.student.id, rs, note, at); }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});
         });
       }
     });
   });
-  function saveLate(sid, reason, note) {
-    return call('late.save', { student_id: sid, reason: reason, note: note }).then(function (r) {
-      var extra = r.auto && r.auto.deducted ? ' (หักคะแนนอัตโนมัติ -' + r.auto.points + ')' : '';
-      toast('บันทึกมาสาย: ' + r.student_name + extra, 'success');
-      afterSave(r.student_name, 'มาสาย · ' + reason);
+  // กล่องบอกกติกา: ครั้งที่ผ่านมาในภาคเรียน + ครั้งถัดไปหักเท่าไร (คำนวณจาก server)
+  function lateRuleHint(d) {
+    var L = d.late || { count: 0, counted: 0, next_deduct: 0, cutoff: '08:35' };
+    return '<div class="field-hint" style="margin-bottom:10px"><i class="bi bi-info-circle"></i> ภาคเรียนนี้มาสาย ' + L.count + ' ครั้ง (หลัง ' + esc(L.cutoff) + ' น. ' + L.counted + ' ครั้ง) · ' +
+      'ถ้ามาถึงหลัง ' + esc(L.cutoff) + ' น. ครั้งนี้จะเป็นครั้งที่ ' + (L.counted + 1) + (L.next_deduct > 0 ? ' หัก <b>' + L.next_deduct + '</b> คะแนน' : ' ยังไม่หักคะแนน') + '</div>';
+  }
+  function saveLate(sid, reason, note, arrive) {
+    return call('late.save', { student_id: sid, reason: reason, note: note, arrive_time: arrive }).then(function (r) {
+      var L = r.late || {};
+      var extra = L.deduct > 0 ? ' · หักคะแนนมาสาย ' + L.deduct + ' (สะสม ' + L.score + ')' : (L.counted_this ? ' · ครั้งที่ ' + L.rank + ' ยังไม่หัก' : ' · ก่อนเวลาตัด ไม่นับหัก');
+      toast('บันทึกมาสาย: ' + r.student_name + extra, L.deduct > 0 ? 'warning' : 'success', 4000);
+      afterSave(r.student_name, 'มาสาย · ' + reason + (L.deduct > 0 ? ' · -' + L.deduct : ''));
     });
   }
 
@@ -337,9 +353,9 @@
       SCAN.offenses = d.items;
       var offs = d.items;
       scanShell({
-        kind: 'behavior', icon: 'star', pill: 'หักคะแนนความประพฤติ', title: 'หักคะแนนความประพฤติ', sub: 'เลือกฐานความผิด · คะแนนขึ้นอัตโนมัติ · รองรับเพิ่มคะแนนทำความดี', reasons: [],
+        kind: 'behavior', icon: 'star', pill: 'หักคะแนนความประพฤติ', title: 'หักคะแนนความประพฤติ', sub: 'เลือกฐานความผิด · คะแนนสะสมเพิ่มอัตโนมัติ · ทำความดีลดยอดสะสมได้', reasons: [],
         body: function () {
-          return '<div class="seg" style="margin-bottom:14px"><button data-bkind="deduct" class="on">➖ หักคะแนน</button><button data-bkind="add">➕ เพิ่มคะแนน (ทำความดี)</button></div>' +
+          return '<div class="seg" style="margin-bottom:14px"><button data-bkind="deduct" class="on">➖ หักคะแนน</button><button data-bkind="add">➕ ทำความดี (ลดยอดสะสม)</button></div>' +
             '<div id="bh-deduct"><div class="md-section"><div class="st"><i class="bi bi-exclamation-diamond"></i> เลือกฐานความผิด</div>' +
             '<div class="reason-grid" id="bh-offgrid">' + offs.map(function (o) { return '<button type="button" class="reason-btn" data-off="' + esc(o.code) + '" data-pts="' + o.points + '">' + esc(o.name) + ' <b style="color:inherit">(-' + o.points + ')</b></button>'; }).join('') + '</div></div></div>' +
             '<div id="bh-add" style="display:none"><div class="field"><label>รายการความดี <span class="req">*</span></label><input class="input" id="bh-goodname" placeholder="เช่น บำเพ็ญประโยชน์ · ช่วยเหลืองาน"></div></div>' +
@@ -359,8 +375,8 @@
             else { var gn = $('#bh-goodname', pv).value.trim(); if (!gn) { toast('กรุณากรอกรายการความดี', 'warning'); return; } payload.offense_name = gn; }
             A.runBtn(ev.currentTarget, function () {
               return call('behavior.save', payload).then(function (r) {
-                toast((kind === 'add' ? 'เพิ่มคะแนน' : 'หักคะแนน') + ': ' + r.student_name + ' (เหลือ ' + r.score_after + ')', 'success');
-                if (r.alert && r.alert.level > 0) setTimeout(function () { Swal.fire({ icon: 'warning', title: 'คะแนนต่ำกว่าเกณฑ์', html: '<div style="font-size:34px;font-weight:800;color:#dc2626;font-family:Kanit">' + r.score_after + ' คะแนน</div><div>' + esc(r.alert.label) + '</div>', confirmButtonColor: '#2563eb' }); }, 400);
+                toast((kind === 'add' ? 'ลดคะแนนสะสม (ทำความดี)' : 'หักคะแนน') + ': ' + r.student_name + ' (สะสม ' + r.score_after + ')', 'success');
+                if (r.alert && r.alert.level > 0) setTimeout(function () { Swal.fire({ icon: 'warning', title: 'คะแนนสะสมถึงเกณฑ์ ' + r.alert.at, html: '<div style="font-size:34px;font-weight:800;color:#dc2626;font-family:Kanit">' + r.score_after + ' คะแนน</div><div>' + esc(r.alert.label) + '</div>', confirmButtonColor: '#2563eb' }); }, 400);
                 afterSave(r.student_name, (kind === 'add' ? '+' : '-') + pts + ' คะแนน');
               });
             }, { loading: 'กำลังบันทึก…', success: 'บันทึกแล้ว' }).catch(function () {});

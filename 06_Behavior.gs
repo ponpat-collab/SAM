@@ -1,34 +1,30 @@
 /**
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
- *  File:        06_Behavior.gs — หัก/เพิ่มคะแนนความประพฤติ + ฐานความผิด (ตั้งค่าได้)
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  File:        06_Behavior.gs — คะแนนความประพฤติสะสม (เริ่ม 0 นับขึ้น) + ฐานความผิด (ตั้งค่าได้)
+ *  Version:     1.1.0
+ *  Last Update: 2026-09-16
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
  * ═══════════════════════════════════════════════════════════════
  */
 
-function _clampScore_(v, map) {
-  var start = cfg_num_(map.start_score) || 100;
-  return Math.max(0, Math.min(start, Math.round(v)));
-}
-
-// ── คะแนน = ค่าที่ "คำนวณจากรายการ" เสมอ (ไม่ใช่บวก/ลบสะสม) ──
-// เหตุผล: ยกเลิกรายการใด ๆ (รวมที่หักอัตโนมัติจากมาสาย) คะแนนต้องกลับถูกต้องเสมอ
-// การบวก/ลบ delta เพี้ยนถาวรเมื่อเคยชนเพดาน clamp 0/100 มาก่อน
-function _behaviorSum_(sid) {
+// ── คะแนนความประพฤติ = "ยอดถูกหักสะสม" เริ่ม 0 นับขึ้น (มากขึ้น = แย่ลง · ถึง 40/60/80/100 = ระดับเตือน) ──
+// คำนวณจากรายการเสมอ (ไม่บวก/ลบสะสม): หัก → +points · ทำความดี → -points · พื้น 0 · ไม่มีเพดาน (เกิน 100 แสดงตามจริง)
+// เหตุผล: ยกเลิกรายการใด ๆ คะแนนต้องกลับถูกเสมอ · การบวก/ลบ delta เพี้ยนถาวรเมื่อเคยชนพื้น 0
+function _clampScore_(v) { return Math.max(0, Math.round(v)); }
+function _behaviorSum_(sid) {                     // ผลรวม points ที่ยังไม่ยกเลิก (หัก = ลบ · ความดี = บวก) — ไม่รวม AUTO เก่า (v1.0.x)
   var sum = 0;
   DB_byLite(SHEETS.BEHAVIOR, 'student_id', String(sid)).forEach(function (r) {
-    if (!_yes_(r.canceled)) sum += cfg_num_(r.points);
+    if (!_yes_(r.canceled) && String(r.offense_code || '') !== 'AUTO') sum += cfg_num_(r.points);
   });
   return sum;
 }
-function _scoreOf_(sid, map) { return _clampScore_((cfg_num_(map.start_score) || 100) + _behaviorSum_(sid), map); }
+function _scoreOf_(sid) { return _clampScore_(-_behaviorSum_(sid)); }
 // เรียกภายใน DB_withLock_ เสมอ (อ่านรายการล่าสุด → เขียนคะแนนที่ถูก)
-function _recomputeScore_(sid, map) {
-  var sc = _scoreOf_(sid, map);
+function _recomputeScore_(sid) {
+  var sc = _scoreOf_(sid);
   DB_update(SHEETS.STUDENTS, sid, { score: sc });
   return sc;
 }
@@ -124,8 +120,8 @@ function Behavior_save(user, p) {
     var fresh = DB_getFresh(SHEETS.STUDENTS, sid);
     if (!fresh) throw new Error('ไม่พบนักเรียน');
     var sum = _behaviorSum_(sid);                                  // รายการที่ยังไม่ยกเลิก (ยังไม่รวมรายการนี้)
-    scoreBefore = _clampScore_((cfg_num_(map.start_score) || 100) + sum, map);
-    scoreAfter = _clampScore_((cfg_num_(map.start_score) || 100) + sum + signed, map);
+    scoreBefore = _clampScore_(-sum);
+    scoreAfter = _clampScore_(-(sum + signed));                    // หัก (signed<0) → สะสมเพิ่ม · ความดี → สะสมลด
     rec = DB_insert(SHEETS.BEHAVIOR, {
       id: _genSeq_('B', DB_rowCount(SHEETS.BEHAVIOR)), date: date, time: cfg_timeNow_(), student_id: sid, kind: kind,
       offense_code: offenseCode, offense_name: offenseName, category: category, detail: detail, points: signed,
@@ -138,61 +134,35 @@ function Behavior_save(user, p) {
   try {
     if (_yes_(map.tg_enabled) && _yes_(map.tg_notify_behavior)) {
       Telegram_toAdmins_((kind === 'add' ? '➕ <b>เพิ่มคะแนน</b>' : '➖ <b>หักคะแนน</b>') + '\n' + _tgEsc_(_stuName_(stu)) + ' (' + _tgEsc_(_stuClassRoom_(stu)) + ')\n' +
-        _tgEsc_(offenseName) + ' · ' + (signed > 0 ? '+' : '') + signed + ' คะแนน\nคงเหลือ ' + scoreAfter + ' คะแนน · โดย ' + _tgEsc_(user.full_name));
+        _tgEsc_(offenseName) + ' · ' + (signed > 0 ? '+' : '') + signed + ' คะแนน\nสะสม ' + scoreAfter + ' คะแนน' + (alert.level ? ' · ' + _tgEsc_(alert.label) : '') + ' · โดย ' + _tgEsc_(user.full_name));
     }
   } catch (e) {}
   _behaviorDeductAlert_(stu, scoreAfter, scoreBefore, map);
   return { ok: true, record: rec, student_name: _stuName_(stu), score_after: scoreAfter, alert: alert };
 }
 
-// แจ้งเตือนเมื่อคะแนนถูกหักสะสม "ข้ามเกณฑ์" 30/50/60 (ยิงครั้งเดียวต่อการข้ามเกณฑ์)
+// แจ้งเตือนเมื่อคะแนนสะสม "ข้ามเกณฑ์" 40/60/80/100 (ยิงครั้งเดียวต่อการข้ามเกณฑ์ · ระดับสูงสุดที่ข้าม)
 function _behaviorDeductAlert_(stu, scoreAfter, scoreBefore, map) {
   try {
-    var start = cfg_num_(map.start_score) || 100;
-    var dedAfter = start - scoreAfter, dedBefore = start - scoreBefore;
-    if (dedAfter <= dedBefore) return;            // คะแนนไม่ได้ลด (เพิ่ม/เท่าเดิม)
-    var ths = String(map.behavior_alert_deducted || '30,50,60').split(',')
-      .map(function (x) { return cfg_num_(x); }).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
+    if (scoreAfter <= scoreBefore) return;        // คะแนนไม่ได้เพิ่ม (ทำความดี/เท่าเดิม)
     var crossed = null;
-    ths.forEach(function (T) { if (dedBefore < T && dedAfter >= T) crossed = T; });   // เกณฑ์สูงสุดที่ข้าม
-    if (crossed == null) return;
-    var title = 'คะแนนพฤติกรรมถูกหักเกิน ' + crossed + ' คะแนน';
-    var msg = _stuName_(stu) + ' (' + _stuClassRoom_(stu) + ') ถูกหักสะสม ' + dedAfter + ' คะแนน (คงเหลือ ' + scoreAfter + ') — ควรดำเนินการตามระเบียบ';
+    _alertLevels_(map).forEach(function (L) { if (scoreBefore < L.at && scoreAfter >= L.at) crossed = L; });
+    if (!crossed) return;
+    var title = 'คะแนนความประพฤติถึง ' + crossed.at + ' — ' + crossed.label;
+    var msg = _stuName_(stu) + ' (' + _stuClassRoom_(stu) + ') คะแนนสะสม ' + scoreAfter + ' คะแนน — ' + crossed.label + 'ตามระเบียบ';
     Notify_pushRoles_(['admin', 'teacher'], 'behavior', title, msg, '#/report/student?id=' + stu.id);
     if (_yes_(map.tg_enabled)) Telegram_toAdmins_('⚠️ <b>' + _tgEsc_(title) + '</b>\n' + _tgEsc_(msg));
   } catch (e) {}
 }
 
-// หักอัตโนมัติ — สร้าง "รายการหักคะแนน" จริง (เห็นและยกเลิกได้ในหน้ารายการ) + ผูก ref_id กับรายการมาสายต้นทาง
-function Behavior_autoDeduct_(user, sid, pts, detail, refId) {
-  var map = Settings_map_(), scoreAfter, rec;
-  DB_withLock_(function () {
-    var fresh = DB_getFresh(SHEETS.STUDENTS, sid);
-    if (!fresh) throw new Error('ไม่พบนักเรียน');
-    scoreAfter = _clampScore_((cfg_num_(map.start_score) || 100) + _behaviorSum_(sid) - Math.abs(pts), map);
-    rec = DB_insert(SHEETS.BEHAVIOR, {
-      id: _genSeq_('B', DB_rowCount(SHEETS.BEHAVIOR)), date: cfg_today_(), time: cfg_timeNow_(), student_id: sid, kind: 'deduct',
-      offense_code: 'AUTO', offense_name: 'มาสายเกินกำหนด', category: 'การมาเรียน', detail: detail, points: -Math.abs(pts),
-      score_after: scoreAfter, photo_url: '', ref_id: String(refId || ''),
-      created_by: user.id, created_by_name: user.full_name + ' (อัตโนมัติ)', canceled: 'no'
-    });
-    DB_update(SHEETS.STUDENTS, sid, { score: scoreAfter });
-  });
-  return { record: rec, score_after: scoreAfter };
-}
-
-// ยกเลิกรายการหักอัตโนมัติที่ผูกกับรายการมาสาย (เรียกจาก Late_cancel) — คืนคะแนนให้อัตโนมัติ
-function Behavior_cancelByRef_(sid, refId, map) {
-  var autos = DB_byLite(SHEETS.BEHAVIOR, 'student_id', String(sid)).filter(function (r) {
-    return String(r.ref_id || '') === String(refId) && !_yes_(r.canceled);
-  });
-  if (!autos.length) return null;
-  var score = null;
-  DB_withLock_(function () {
-    autos.forEach(function (a) { DB_update(SHEETS.BEHAVIOR, a.id, { canceled: 'yes' }); });
-    score = _recomputeScore_(sid, map);
-  });
-  return { canceled: autos.length, score_after: score };
+// ยกเลิกรายการหักอัตโนมัติ (AUTO) ที่เหลือจาก v1.0.x — คะแนนมาสายแยกก้อนแล้ว ห้ามนับซ้ำในความประพฤติ
+function Behavior_retireAuto_() {
+  var autos = DB_readLite(SHEETS.BEHAVIOR).filter(function (r) { return String(r.offense_code || '') === 'AUTO' && !_yes_(r.canceled); });
+  if (!autos.length) return 0;
+  DB_beginBatch();
+  try { autos.forEach(function (a) { DB_update(SHEETS.BEHAVIOR, a.id, { canceled: 'yes' }); }); }
+  finally { DB_endBatch(); }
+  return autos.length;
 }
 
 // ── ซ่อมแถวที่เขียนช่วง v1.0.6–1.0.7 (ตอนนั้น ref_id ถูกแทรก "กลาง" schema → คอลัมน์เลื่อน) ──
@@ -217,13 +187,14 @@ function Behavior_repairShift_() {
   return { fixed: fixed, total: vals.length };
 }
 
-// คำนวณคะแนนใหม่ทั้งระบบจากรายการจริง (ซ่อมข้อมูลที่เคยเพี้ยนจากการบวก/ลบสะสม) — single scan + batch
+// คำนวณคะแนนใหม่ทั้งระบบจากรายการจริง (ความประพฤติ + มาสาย) — single scan + batch
 function Behavior_recomputeAll(user, p) {
   Auth_requireCap(user, 'student.manage');
   var shift = Behavior_repairShift_();          // ซ่อมคอลัมน์ที่เลื่อนก่อน (ถ้ามี) แล้วค่อยคำนวณคะแนน
-  var map = Settings_map_(), start = cfg_num_(map.start_score) || 100, sums = {};
+  var retired = Behavior_retireAuto_();          // AUTO เก่า → ยกเลิก (มาสายแยกก้อนแล้ว)
+  var sums = {};
   DB_readLite(SHEETS.BEHAVIOR).forEach(function (r) {
-    if (_yes_(r.canceled)) return;
+    if (_yes_(r.canceled) || String(r.offense_code || '') === 'AUTO') return;
     var k = String(r.student_id);
     sums[k] = (sums[k] || 0) + cfg_num_(r.points);
   });
@@ -231,12 +202,13 @@ function Behavior_recomputeAll(user, p) {
   DB_beginBatch();
   try {
     stus.forEach(function (s) {
-      var want = _clampScore_(start + (sums[String(s.id)] || 0), map);
+      var want = _clampScore_(-(sums[String(s.id)] || 0));
       if (cfg_num_(s.score) !== want) { DB_update(SHEETS.STUDENTS, s.id, { score: want }); fixed++; }
     });
   } finally { DB_endBatch(); }
-  Audit_log_(user, 'score.recompute', 'student', '', { fixed: fixed, total: stus.length, shift_fixed: shift.fixed });
-  return { ok: true, fixed: fixed, total: stus.length, shift_fixed: shift.fixed };
+  var late = Late_recomputeAll_();
+  Audit_log_(user, 'score.recompute', 'student', '', { fixed: fixed, late_fixed: late.fixed, total: stus.length, shift_fixed: shift.fixed, auto_retired: retired });
+  return { ok: true, fixed: fixed, late_fixed: late.fixed, total: stus.length, shift_fixed: shift.fixed, auto_retired: retired };
 }
 
 function Behavior_list(user, p) {
@@ -282,7 +254,7 @@ function Behavior_cancel(user, p) {
   var map = Settings_map_(), signed = cfg_num_(r.points), sid = String(r.student_id), score = null;
   DB_withLock_(function () {
     DB_update(SHEETS.BEHAVIOR, id, { canceled: 'yes' });
-    score = _recomputeScore_(sid, map);           // คำนวณใหม่จากรายการที่เหลือ — คืนคะแนนถูกเสมอ
+    score = _recomputeScore_(sid);                // คำนวณใหม่จากรายการที่เหลือ — คืนคะแนนถูกเสมอ
   });
   Audit_log_(user, 'behavior.cancel', 'behavior', id, { restore: -signed, score_after: score });
   return { ok: true, score_after: score };
