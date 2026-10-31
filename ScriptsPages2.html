@@ -1,6 +1,6 @@
 <!-- ═══════════════════════════════════════════════════════════════
   ระบบงานปกครองนักเรียน (SAM) · ScriptsPages2.html — นักเรียน · รายการ · รายงาน · แอดมิน
-  Version: 1.1.0 (2026-09-16) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Version: 1.1.1 (2026-10-31) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
   Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
 ═══════════════════════════════════════════════════════════════ -->
 <script type="text/x-sam" id="sam-pages2">
@@ -87,7 +87,7 @@
         $('#st-save', card).addEventListener('click', function (ev) {
           var f = $('#st-form', card), pl = { is_new: isNew };
           ['id', 'prefix', 'first_name', 'last_name', 'class_level', 'room', 'number', 'advisor_name', 'status'].forEach(function (k) { if (f[k]) pl[k] = f[k].value; });
-          A.runBtn(ev.currentTarget, function () { return call('student.save', pl).then(function () { toast('บันทึกนักเรียนแล้ว', 'success'); Modal.close(); loadStudents(); }); }).catch(function () {});
+          A.runBtn(ev.currentTarget, function () { return call('student.save', pl).then(function () { A.invalidateClassrooms(); toast('บันทึกนักเรียนแล้ว', 'success'); Modal.close(); loadStudents(); }); }).catch(function () {});
         });
         if (!isNew) $('#st-del', card).addEventListener('click', function () {
           A.confirm({ title: 'จำหน่ายนักเรียนออก?', message: s.first_name + ' จะถูกตั้งสถานะ "จำหน่ายออก" (ข้อมูลยังเก็บไว้)', okText: 'จำหน่ายออก', danger: true }).then(function (ok) { if (!ok) return; call('student.delete', { id: s.id }).then(function () { toast('จำหน่ายนักเรียนแล้ว', 'success'); Modal.close(); loadStudents(); }).catch(function (e) { toast(e.message, 'error'); }); });
@@ -137,7 +137,7 @@
         rows.slice(0, 8).map(function (r) { return '<tr><td>' + esc(r.id) + '</td><td>' + esc((r.prefix || '') + r.first_name + ' ' + r.last_name) + '</td><td>ม.' + esc(r.class_level) + '/' + esc(r.room) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
         (rows.length > 8 ? '<div class="field-hint" style="text-align:center;margin-top:8px">และอีก ' + (rows.length - 8) + ' รายการ</div>' : '');
       var runBtn = $('#imp-run'); runBtn.style.display = 'inline-flex';
-      runBtn.onclick = function (ev) { A.runBtn(ev.currentTarget, function () { return call('student.import', { rows: rows }).then(function (r) { toast('นำเข้าสำเร็จ: เพิ่ม ' + r.created + ' · อัปเดต ' + r.updated + ' · ข้าม ' + r.skipped, 'success', 5000); Modal.close(); loadStudents(); }); }, { loading: 'กำลังนำเข้า…' }).catch(function () {}); };
+      runBtn.onclick = function (ev) { A.runBtn(ev.currentTarget, function () { return call('student.import', { rows: rows }).then(function (r) { A.invalidateClassrooms(); toast('นำเข้าสำเร็จ: เพิ่ม ' + r.created + ' · อัปเดต ' + r.updated + ' · ข้าม ' + r.skipped, 'success', 5000); Modal.close(); loadStudents(); }); }, { loading: 'กำลังนำเข้า…' }).catch(function () {}); };
     }
     function mapCols(head) { function find(keys) { for (var i = 0; i < head.length; i++) { var h = head[i].toLowerCase(); if (keys.some(function (k) { return h.indexOf(k) >= 0; })) return i; } return -1; } return { id: find(['รหัส', 'id', 'code']), prefix: find(['คำนำหน้า', 'prefix']), first: find(['ชื่อ', 'first']), last: find(['นามสกุล', 'สกุล', 'last']), cls: find(['ชั้น', 'class', 'level']), room: find(['ห้อง', 'room']), no: find(['เลขที่', 'number', 'no']), adv: find(['ปรึกษา', 'advisor']) }; }
     function cell(r, i) { return i >= 0 ? String(r[i] == null ? '' : r[i]).trim() : ''; }
@@ -268,21 +268,24 @@
 
   // ═══ ROOM REPORT ═══
   A.route('#/report/room', function () {
-    var st = { from: '', to: '' }, p = page();
+    var st = { from: '', to: '', cls: '', room: '' }, p = page();
     p.innerHTML = hero({ i: 'building', t: 'รายงานรายห้องเรียน' }, 'รายงานรายห้องเรียน', 'สรุปมาสาย · ลากลับ · คะแนนที่ถูกหัก ของแต่ละห้อง', null) +
-      '<div class="panel"><div class="toolbar"><span style="font-weight:600;font-size:13px;color:var(--ink2)">ช่วงวันที่</span>' +
+      '<div class="panel"><div class="toolbar">' +
+        (A.roomFilter.show() ? '<span style="font-weight:600;font-size:13px;color:var(--ink2)"><i class="bi bi-funnel"></i> ห้อง</span>' + A.roomFilter.html('rr') : '') +
+        '<span style="font-weight:600;font-size:13px;color:var(--ink2)">ช่วงวันที่</span>' +
         '<input type="date" class="input" id="rr-from" style="max-width:160px"><input type="date" class="input" id="rr-to" style="max-width:160px">' +
         '<button class="btn btn-primary btn-sm" id="rr-go"><i class="bi bi-funnel"></i> สรุป</button>' +
         '<button class="btn btn-ghost btn-sm" id="rr-print" style="margin-left:auto"><i class="bi bi-printer"></i> พิมพ์</button></div>' +
         '<div id="rr-body">' + '<div class="skel" style="height:200px"></div>' + '</div></div>';
     $('#rr-go').addEventListener('click', function () { st.from = $('#rr-from').value; st.to = $('#rr-to').value; load(); });
+    A.roomFilter.wire('rr', st, load);
     $('#rr-print').addEventListener('click', function (ev) {
       A.runBtn(ev.currentTarget, function () {
-        return call('report.room', { from: st.from, to: st.to }).then(function (d) {
+        return call('report.room', { from: st.from, to: st.to, class_level: st.cls, room: st.room }).then(function (d) {
           if (!d.rooms.length) { toast('ไม่มีข้อมูลให้พิมพ์', 'warning'); return; }
-          var t = d.totals;
+          var t = d.totals, fl = A.roomFilter.label(st);
           A.printDoc({
-            title: 'รายงานสรุปรายห้องเรียน', sub: rangeText(st),
+            title: 'รายงานสรุปรายห้องเรียน', sub: (fl ? 'เฉพาะ ' + fl + ' · ' : '') + rangeText(st),
             summary: '<b>รวมทั้งหมด:</b> นักเรียน ' + t.students + ' คน · มาสาย ' + t.late + ' ครั้ง · ลากลับ ' + t.leave + ' ครั้ง · หักคะแนน ' + t.deduct + ' ครั้ง (รวม ' + t.points + ' คะแนน)',
             html: A.prTable([
               { label: 'ห้อง', fmt: function (r) { return 'ม.' + r.class_level + '/' + r.room; } },
@@ -297,9 +300,9 @@
     });
     function load() {
       var host = $('#rr-body'); host.innerHTML = '<div class="skel" style="height:200px"></div>';
-      call('report.room', { from: st.from, to: st.to }).then(function (d) {
+      call('report.room', { from: st.from, to: st.to, class_level: st.cls, room: st.room }).then(function (d) {
         if (!$('#rr-body')) return;
-        if (!d.rooms.length) { host.innerHTML = emptyBox('inbox', 'ไม่มีข้อมูล'); return; }
+        if (!d.rooms.length) { host.innerHTML = emptyBox('inbox', 'ไม่มีข้อมูล', A.roomFilter.label(st) ? 'ไม่มีนักเรียนใน ' + A.roomFilter.label(st) : ''); return; }
         var t = d.totals;
         host.innerHTML = '<div class="sd-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">' +
           statCard('people', 'g-indigo', t.students, 'นักเรียน') + statCard('clock-history', 'g-amber', t.late, 'มาสาย') + statCard('house-heart', 'g-sky', t.leave, 'ลากลับ') + statCard('dash-circle', 'g-rose', t.deduct, 'ครั้งหักคะแนน') + statCard('graph-down', 'g-slate', t.points, 'คะแนนถูกหัก') + '</div>' +
@@ -313,9 +316,10 @@
 
   // ═══ PERIOD REPORT ═══
   A.route('#/report/period', function () {
-    var st = { from: '', to: '' }, p = page();
+    var st = { from: '', to: '', cls: '', room: '' }, p = page();
     p.innerHTML = hero({ i: 'bar-chart-line', t: 'สรุปตามช่วงเวลา' }, 'สรุปตามช่วงเวลา', 'กราฟและสถิติภาพรวม · สาเหตุยอดนิยม · ฐานความผิดที่พบบ่อย', null) +
       '<div class="panel"><div class="toolbar">' +
+        (A.roomFilter.show() ? '<span style="font-weight:600;font-size:13px;color:var(--ink2)"><i class="bi bi-funnel"></i> ห้อง</span>' + A.roomFilter.html('pr') : '') +
         '<div class="seg"><button data-range="7">7 วัน</button><button data-range="30" class="on">30 วัน</button><button data-range="90">90 วัน</button></div>' +
         '<input type="date" class="input" id="pr-from" style="max-width:150px"><input type="date" class="input" id="pr-to" style="max-width:150px">' +
         '<button class="btn btn-primary btn-sm" id="pr-go"><i class="bi bi-funnel"></i> สรุป</button>' +
@@ -323,12 +327,13 @@
         '<div id="pr-body">' + '<div class="skel" style="height:260px"></div>' + '</div></div>';
     $$('[data-range]').forEach(function (b) { b.addEventListener('click', function () { $$('[data-range]').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); var n = Number(b.getAttribute('data-range')); var to = A.today(); var from = new Date(Date.now() - (n - 1) * 86400000); st.to = to; st.from = from.getFullYear() + '-' + ('0' + (from.getMonth() + 1)).slice(-2) + '-' + ('0' + from.getDate()).slice(-2); $('#pr-from').value = st.from; $('#pr-to').value = st.to; load(); }); });
     $('#pr-go').addEventListener('click', function () { st.from = $('#pr-from').value; st.to = $('#pr-to').value; load(); });
+    A.roomFilter.wire('pr', st, load);
     $('#pr-print').addEventListener('click', function (ev) {
       A.runBtn(ev.currentTarget, function () {
-        return call('report.period', { from: st.from, to: st.to }).then(function (d) {
-          var k = d.kpi;
+        return call('report.period', { from: st.from, to: st.to, class_level: st.cls, room: st.room }).then(function (d) {
+          var k = d.kpi, fl = A.roomFilter.label(st);
           A.printDoc({
-            title: 'รายงานสรุปตามช่วงเวลา', sub: 'ช่วง ' + TH.date(d.from) + ' – ' + TH.date(d.to),
+            title: 'รายงานสรุปตามช่วงเวลา', sub: (fl ? 'เฉพาะ ' + fl + ' · ' : '') + 'ช่วง ' + TH.date(d.from) + ' – ' + TH.date(d.to),
             summary: '<b>ภาพรวม:</b> มาสาย ' + k.late + ' ครั้ง · ลากลับ ' + k.leave + ' ครั้ง · หักคะแนน ' + k.deduct + ' ครั้ง (รวม ' + k.points + ' คะแนน)',
             html: '<h3 style="font-family:Kanit;font-size:13pt;margin:10px 0 6px">นักเรียนที่มีสถิติสูงสุด</h3>' +
               A.prTable([
@@ -347,7 +352,7 @@
     });
     function load() {
       var host = $('#pr-body'); host.innerHTML = '<div class="skel" style="height:260px"></div>';
-      call('report.period', { from: st.from, to: st.to }).then(function (d) {
+      call('report.period', { from: st.from, to: st.to, class_level: st.cls, room: st.room }).then(function (d) {
         if (!$('#pr-body')) return;
         var k = d.kpi;
         var trend = A.svgLine(d.days, { keys: [{ key: 'late', color: '#f59e0b', label: 'มาสาย' }, { key: 'leave', color: '#0ea5e9', label: 'ลากลับ' }, { key: 'deduct', color: '#ef4444', label: 'หักคะแนน' }] });
@@ -439,31 +444,56 @@
           '<div class="oact"><button data-edit="' + esc(o.code) + '"><i class="bi bi-pencil"></i></button><button data-del="' + esc(o.code) + '"><i class="bi bi-trash"></i></button></div></div></div>';
       }).join('') + '<div class="off-card off-add" id="off-add"><i class="bi bi-plus-lg"></i><div>เพิ่มฐานความผิด</div></div></div>';
       var byCode = {}; d.items.forEach(function (o) { byCode[o.code] = o; });
-      $('#off-add').addEventListener('click', function () { openOffenseModal(null); });
+      $('#off-add').addEventListener('click', function () { openOffenseModal(null, d.next_code); });
       $$('[data-edit]', host).forEach(function (b) { b.addEventListener('click', function () { openOffenseModal(byCode[b.getAttribute('data-edit')]); }); });
       $$('[data-toggle]', host).forEach(function (b) { b.addEventListener('change', function () { call('offense.toggle', { code: b.getAttribute('data-toggle') }).then(function () { loadOffenses(); }).catch(function (e) { toast(e.message, 'error'); }); }); });
       $$('[data-del]', host).forEach(function (b) { b.addEventListener('click', function () { A.confirm({ title: 'ลบฐานความผิด?', message: 'ลบ ' + b.getAttribute('data-del') + ' (ถ้ามีการใช้แล้วให้ปิดใช้งานแทน)', danger: true }).then(function (ok) { if (!ok) return; call('offense.delete', { code: b.getAttribute('data-del') }).then(function () { toast('ลบแล้ว', 'success'); loadOffenses(); }).catch(function (e) { toast(e.message, 'error'); }); }); }); });
     }).catch(function (e) { host.innerHTML = emptyBox('wifi-off', 'โหลดไม่สำเร็จ', e.message); });
   }
-  function openOffenseModal(o) {
+  function openOffenseModal(o, nextCode) {
     var isNew = !o, sel = { icon: o ? o.icon : 'exclamation-triangle', color: o ? o.color : '#ef4444' };
+    // ★ รหัส = key ภายในระบบ → เสนอให้อัตโนมัติ (B08…) + sanitize ขณะพิมพ์ + hint + inline error (pitfall "Free-text technical key field")
     Modal.open({
       title: isNew ? 'เพิ่มฐานความผิด' : 'แก้ไขฐานความผิด', icon: 'exclamation-diamond', large: true,
-      html: '<form id="of-form"><div class="grid-2" style="gap:12px"><div class="field"><label>รหัส <span class="req">*</span></label><input class="input" name="code" value="' + esc(o ? o.code : '') + '"' + (isNew ? '' : ' readonly') + ' placeholder="B08"></div>' +
-        '<div class="field"><label>คะแนนที่หัก <span class="req">*</span></label><input class="input" type="number" name="points" value="' + (o ? o.points : '') + '" min="1"></div></div>' +
-        '<div class="field"><label>ชื่อฐานความผิด <span class="req">*</span></label><input class="input" name="name" value="' + esc(o ? o.name : '') + '"></div>' +
+      html: '<form id="of-form" data-enter-save autocomplete="off"><div class="grid-2" style="gap:12px"><div class="field" data-fwrap="code"><label>รหัส <span class="req">*</span></label><input class="input" name="code" value="' + esc(o ? o.code : (nextCode || '')) + '"' + (isNew ? '' : ' readonly') + ' placeholder="B08" maxlength="10" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase">' +
+        '<div class="field-hint">' + (isNew ? 'ระบบตั้งให้แล้ว แก้ได้ · ใช้ตัวอักษรอังกฤษ A-Z และตัวเลข 0-9 ไม่เกิน 10 ตัว' : 'รหัสแก้ไขไม่ได้ (ใช้อ้างอิงในประวัติ)') + '</div></div>' +
+        '<div class="field" data-fwrap="points"><label>คะแนนที่หัก <span class="req">*</span></label><input class="input" type="number" name="points" value="' + (o ? o.points : '') + '" min="1" inputmode="numeric"></div></div>' +
+        '<div class="field" data-fwrap="name"><label>ชื่อฐานความผิด <span class="req">*</span></label><input class="input" name="name" value="' + esc(o ? o.name : '') + '" placeholder="เช่น ไม่ติดโบว์ / เครื่องแต่งกายผิดระเบียบ"></div>' +
         '<div class="field"><label>หมวด</label><input class="input" name="category" value="' + esc(o ? o.category : '') + '" placeholder="เช่น เครื่องแต่งกาย"></div>' +
         '<div class="field"><label>ไอคอน</label><div class="icon-picker" id="of-icons">' + ICONS.map(function (i) { return '<button type="button" data-ic="' + i + '"' + (i === sel.icon ? ' class="on"' : '') + '><i class="bi bi-' + i + '"></i></button>'; }).join('') + '</div></div>' +
         '<div class="field"><label>สี</label><div class="color-picker" id="of-colors">' + COLORS.map(function (c) { return '<button type="button" data-cl="' + c + '" style="background:' + c + '"' + (c === sel.color ? ' class="on"' : '') + '></button>'; }).join('') + '</div></div>' +
         '<label class="switch"><input type="checkbox" name="active"' + (!o || o.is_active ? ' checked' : '') + '><span class="track"></span> เปิดใช้งาน</label></form>',
       footer: '<button class="btn btn-ghost" data-action="close-modal">ยกเลิก</button><button class="btn btn-primary" id="of-save"><i class="bi bi-check-lg"></i> บันทึก</button>',
       onOpen: function (card) {
+        var f = $('#of-form', card);
+        var codeIn = f.querySelector('[name="code"]'), nameIn = f.querySelector('[name="name"]'), ptsIn = f.querySelector('[name="points"]'), catIn = f.querySelector('[name="category"]'), actIn = f.querySelector('[name="active"]');
+        function setErr(key, msg) {
+          var w = f.querySelector('[data-fwrap="' + key + '"]'); if (!w) return;
+          var old = w.querySelector('.field-error'); if (old) old.remove();
+          w.classList.toggle('has-error', !!msg);
+          if (msg) { var e = document.createElement('div'); e.className = 'field-error'; e.innerHTML = '<i class="bi bi-exclamation-circle-fill"></i> ' + esc(msg); w.appendChild(e); }
+        }
+        // sanitize ขณะพิมพ์: uppercase + ตัดอักขระนอก A-Z 0-9 _ - (แป้นไทย/ช่องว่าง/ตัวเล็ก → ไม่ติดอีก)
+        codeIn.addEventListener('input', function () {
+          var v = codeIn.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10);
+          if (v !== codeIn.value) codeIn.value = v;
+          setErr('code', '');
+        });
+        nameIn.addEventListener('input', function () { setErr('name', ''); });
+        ptsIn.addEventListener('input', function () { setErr('points', ''); });
         $$('[data-ic]', card).forEach(function (b) { b.addEventListener('click', function () { $$('[data-ic]', card).forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); sel.icon = b.getAttribute('data-ic'); }); });
         $$('[data-cl]', card).forEach(function (b) { b.addEventListener('click', function () { $$('[data-cl]', card).forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); sel.color = b.getAttribute('data-cl'); }); });
         $('#of-save', card).addEventListener('click', function (ev) {
-          var f = $('#of-form', card);
-          A.runBtn(ev.currentTarget, function () { return call('offense.save', { is_new: isNew, code: f.code.value, name: f.name.value, category: f.category.value, points: f.points.value, icon: sel.icon, color: sel.color, is_active: f.active.checked }).then(function () { toast('บันทึกแล้ว', 'success'); Modal.close(); loadOffenses(); }); }).catch(function () {});
+          var code = codeIn.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 10), name = nameIn.value.trim(), pts = Number(ptsIn.value);
+          var errs = 0;
+          if (isNew && !code) { setErr('code', 'กรอกรหัส เช่น B08 (หรือเว้นว่างให้ระบบตั้งให้)'); }   // ว่างได้ — server ตั้งให้
+          if (!name) { setErr('name', 'กรุณากรอกชื่อฐานความผิด'); errs++; }
+          if (!(pts > 0)) { setErr('points', 'กรอกคะแนนที่หักเป็นตัวเลขมากกว่า 0'); errs++; }
+          if (errs) { var first = f.querySelector('.has-error .input'); if (first) first.focus(); toast('กรุณาแก้ไข ' + errs + ' รายการ', 'warning'); return; }
+          setErr('code', '');
+          A.runBtn(ev.currentTarget, function () { return call('offense.save', { is_new: isNew, code: code, name: name, category: catIn.value, points: pts, icon: sel.icon, color: sel.color, is_active: actIn.checked }).then(function (r) { toast('บันทึกฐานความผิด ' + esc((r && r.code) || code) + ' แล้ว', 'success'); Modal.close(); loadOffenses(); }); }).catch(function (e) { if (e && /รหัส/.test(e.message || '')) setErr('code', e.message); });
         });
+        if (isNew) setTimeout(function () { try { nameIn.focus(); } catch (e) {} }, 60);   // รหัสเสนอให้แล้ว → เริ่มที่ชื่อ
       }
     });
   }

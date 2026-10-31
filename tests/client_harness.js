@@ -19,15 +19,27 @@ if (!win.requestAnimationFrame) win.requestAnimationFrame = function (fn) { retu
 win.Swal = { fire: function () { return Promise.resolve({ isConfirmed: true }); } };
 
 // mock google.script.run → backend
-win.google = { script: { run: (function () {
-  var sh = null, fh = null;
-  var obj = {
-    withSuccessHandler: function (f) { sh = f; return obj; },
-    withFailureHandler: function (f) { fh = f; return obj; },
-    api: function (req) { setTimeout(function () { try { var out = { ok: true, data: _dispatch_(req) }; if (sh) sh(out); } catch (e) { if (sh) sh({ ok: false, error: e.message }); } sh = fh = null; }, 0); }
+// ★ ต้องสร้าง chain ใหม่ต่อ call — handler ร่วมกัน (singleton) ทำให้ 2 call ที่ยิงพร้อมกันได้ response สลับกัน
+//   (เคสจริง: report.room + student.classrooms พร้อมกัน → d.totals undefined) · GAS จริงแยก chain ต่อ call อยู่แล้ว
+//   run.api(req, sh, fh) คงไว้เป็น hook กลาง — เทสต์เดิม patch run.api เพื่อนับ action ได้เหมือนเดิม
+win.google = { script: { run: {
+  withSuccessHandler: function (f) { return mkChain(f, null); },
+  withFailureHandler: function (f) { return mkChain(null, f); },
+  api: function (req, sh, fh) {
+    setTimeout(function () {
+      try { var out = { ok: true, data: _dispatch_(req) }; if (sh) sh(out); }
+      catch (e) { if (sh) sh({ ok: false, error: e.message }); }
+    }, 0);
+  }
+} } };
+function mkChain(sh, fh) {
+  var c = {
+    withSuccessHandler: function (f) { sh = f; return c; },
+    withFailureHandler: function (f) { fh = f; return c; },
+    api: function (req) { return win.google.script.run.api(req, sh, fh); }
   };
-  return obj;
-})() } };
+  return c;
+}
 
 // boot data = public bundle
 var pub = _dispatch_({ action: 'app.bootstrap', token: '', payload: {} });
@@ -41,6 +53,94 @@ var scriptEl = doc.createElement('script'); scriptEl.textContent = clientSrc; do
 var pass = 0, fail = 0;
 function warn5() { return Array.from(doc.querySelectorAll('#toast-host .toast')).filter(function (t) { return /ครบ 5 หลัก/.test(t.textContent); }).length; }
 function ok(c, m) { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } }
+function finish() {
+  console.log('════════════════════════════════════════');
+  console.log((fail === 0 ? '✅' : '❌') + ' CLIENT PASS ' + pass + ' / FAIL ' + fail);
+  process.exit(fail === 0 ? 0 : 1);
+}
+// ── v1.1.1: ตัวกรองห้องในรายงาน (admin) + ฟอร์มฐานความผิด (รหัสเสนอให้/sanitize/Enter) ──
+function afterStudentReport() {
+  // เตรียมห้องเพิ่ม (backend ของ client harness seed แค่ 30001 ใน 3/1): 3/2 + 4/1 → classrooms = ม.3(2 ห้อง) + ม.4
+  var tk0 = win.SAM.Store.token;
+  _dispatch_({ action: 'student.save', token: tk0, payload: { is_new: true, id: '30002', prefix: 'เด็กหญิง', first_name: 'ห้องสอง', last_name: 'ทดสอบ', class_level: '3', room: '2', number: '1' } });
+  _dispatch_({ action: 'student.save', token: tk0, payload: { is_new: true, id: '30003', prefix: 'นาย', first_name: 'ชั้นสี่', last_name: 'ทดสอบ', class_level: '4', room: '1', number: '1' } });
+  win.SAM.invalidateClassrooms();
+  win.location.hash = '#/report/room';
+  win.SAM.dispatch();
+  setTimeout(function () {
+    var cs = doc.querySelector('#rr-cls'), rs = doc.querySelector('#rr-room');
+    ok(!!cs && !!rs, 'รายงานรายห้อง (admin) มีตัวกรองชั้น/ห้อง');
+    ok(cs && cs.options.length === 3, 'ตัวกรองชั้นโหลดจาก student.classrooms (ทุกชั้น + ม.3 + ม.4 = ' + (cs ? cs.options.length : 0) + ')');
+    var rowsAll = doc.querySelectorAll('#rr-body tbody tr').length;
+    cs.value = '3'; cs.dispatchEvent(new win.Event('change', { bubbles: true }));
+    setTimeout(function () {
+      var rows = Array.from(doc.querySelectorAll('#rr-body tbody tr'));
+      ok(rows.length === 2 && rows.length < rowsAll && rows.every(function (r) { return /ม\.3\//.test(r.textContent); }), 'เลือก ม.3 → ตารางเหลือเฉพาะห้องของ ม.3 (' + rows.length + '/' + rowsAll + ')');
+      ok(rs.options.length === 3, 'ตัวเลือกห้องเปลี่ยนตามชั้น (ทุกห้อง + 2 ห้อง)');
+      rs.value = '2'; rs.dispatchEvent(new win.Event('change', { bubbles: true }));
+      setTimeout(function () {
+        var rows2 = doc.querySelectorAll('#rr-body tbody tr');
+        ok(rows2.length === 1 && /ม\.3\/2/.test(rows2[0].textContent), 'เลือกห้อง 2 → เหลือ ม.3/2 ห้องเดียว');
+        // period report มีตัวกรองเดียวกัน
+        win.location.hash = '#/report/period';
+        win.SAM.dispatch();
+        setTimeout(function () {
+          ok(!!doc.querySelector('#pr-cls') && !!doc.querySelector('#pr-room'), 'สรุปช่วงเวลา (admin) มีตัวกรองชั้น/ห้อง');
+          // dashboard มีตัวกรอง + เลือกแล้วหัวเรื่องบอก "เฉพาะ ม.x/y"
+          win.location.hash = '#/dashboard';
+          win.SAM.dispatch();
+          setTimeout(function () {
+            var dc = doc.querySelector('#db-cls');
+            ok(!!dc, 'แดชบอร์ด (admin) มีตัวกรองห้อง');
+            dc.value = '3'; dc.dispatchEvent(new win.Event('change', { bubbles: true }));
+            setTimeout(function () {
+              ok(/เฉพาะ ม\.3 ทุกห้อง/.test(doc.getElementById('page').innerHTML) && !!doc.querySelector('#db-clear'), 'เลือกชั้นบนแดชบอร์ด → แสดงป้าย "เฉพาะ ม.3 ทุกห้อง" + ปุ่มดูทั้งหมด');
+              ok((doc.querySelector('#db-cls') || {}).value === '3', 'รีเฟรชแดชบอร์ดแล้วตัวกรองยังคงค่า');
+              testOffenseForm();
+            }, 150);
+          }, 150);
+        }, 150);
+      }, 150);
+    }, 150);
+  }, 200);
+}
+function testOffenseForm() {
+  win.location.hash = '#/admin/offenses';
+  win.SAM.dispatch();
+  setTimeout(function () {
+    var before = doc.querySelectorAll('.off-card:not(.off-add)').length;
+    ok(before === 7, 'หน้าฐานความผิดมี 7 รายการเริ่มต้น (' + before + ')');
+    doc.querySelector('#off-add').click();
+    setTimeout(function () {
+      var f = doc.querySelector('#of-form'), code = f && f.querySelector('[name="code"]'), name = f && f.querySelector('[name="name"]'), pts = f && f.querySelector('[name="points"]');
+      ok(!!f && code.value === 'B08', '★ เปิดฟอร์มเพิ่ม → รหัสถูกเสนอให้เป็น B08 (เคสลูกค้า: ไม่ต้องคิดรหัสเอง)');
+      ok(code.getAttribute('maxlength') === '10' && !!f.querySelector('[data-fwrap="code"] .field-hint'), 'ช่องรหัสมี maxlength + hint บอกกติกา');
+      code.value = 'ข b 09'; code.dispatchEvent(new win.Event('input', { bubbles: true }));
+      ok(code.value === 'B09', 'พิมพ์ "ข b 09" → sanitize เป็น B09 (ไทย/ช่องว่าง/ตัวเล็กไม่ติดอีก)');
+      // กดบันทึกโดยยังไม่กรอกชื่อ → inline error ชี้ช่อง (ไม่ใช่ toast อย่างเดียว) · ไม่ยิง API
+      var calls = 0, _api = win.google.script.run.api;
+      win.google.script.run.api = function (req) { if (req.action === 'offense.save') calls++; return _api.apply(this, arguments); };
+      doc.querySelector('#of-save').click();
+      setTimeout(function () {
+        ok(calls === 0 && !!f.querySelector('[data-fwrap="name"].has-error .field-error'), 'ไม่กรอกชื่อ → inline error ที่ช่องชื่อ + ไม่ยิง API');
+        name.value = 'ทดสอบจากฟอร์ม'; name.dispatchEvent(new win.Event('input', { bubbles: true })); pts.value = '5';
+        ok(!f.querySelector('[data-fwrap="name"].has-error'), 'พิมพ์ชื่อแล้ว error หาย');
+        // Enter ในช่องชื่อ = บันทึก (data-enter-save)
+        name.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        setTimeout(function () {
+          ok(calls === 1, 'กด Enter ในฟอร์ม → บันทึก 1 ครั้ง');
+          ok(!doc.querySelector('#of-form'), 'บันทึกสำเร็จ → modal ปิด');
+          var after = doc.querySelectorAll('.off-card:not(.off-add)').length;
+          ok(after === before + 1, 'รายการเพิ่มเป็น ' + after);
+          var tok = win.SAM.Store.token, lst = _dispatch_({ action: 'offense.list', token: tok, payload: { all: 1 } });
+          ok(lst.items.some(function (o) { return o.code === 'B09' && o.name === 'ทดสอบจากฟอร์ม'; }), 'DB มี B09 ชื่อตรงกับที่กรอก');
+          win.google.script.run.api = _api;
+          finish();
+        }, 300);
+      }, 100);
+    }, 150);
+  }, 200);
+}
 
 console.log('════ CLIENT HARNESS (jsdom) ════');
 ok(typeof win.SAM.boot === 'function' && typeof win.SAM.wireGlobal === 'function', 'SAM.boot/wireGlobal exist');
@@ -186,9 +286,7 @@ function doLogin() {
                 try { btn.click(); } catch (e) {}
                 ok(printed === before + 1 && !!doc.querySelector('.pr-only'), 'กดปุ่มพิมพ์รายงานรายบุคคล → สร้างเอกสาร + สั่งพิมพ์จริง');
               }
-              console.log('════════════════════════════════════════');
-              console.log((fail === 0 ? '✅' : '❌') + ' CLIENT PASS ' + pass + ' / FAIL ' + fail);
-              process.exit(fail === 0 ? 0 : 1);
+              afterStudentReport();
             }, 200);
             return;
           }, 60);

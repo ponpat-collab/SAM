@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        07_Reports.gs — Dashboard รายวัน · รายบุคคล · รายห้อง · ช่วงเวลา
- *  Version:     1.1.0
- *  Last Update: 2026-09-16
+ *  Version:     1.1.1
+ *  Last Update: 2026-10-31
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -14,12 +14,25 @@ function _reportScopeKey_(user) {
   var sc = _studentScope_(user);
   return sc === null ? 'all' : ('a' + user.advisor_class + '_' + user.advisor_room);
 }
+// ── ตัวกรองชั้น/ห้องสำหรับ role ที่เห็นทั้งโรงเรียน (admin/ครูปกครอง/ผู้บริหาร) ──
+// ★ narrowing เท่านั้น: role ที่ถูก scope (advisor) คืน scope ตนเสมอ — param จาก client ขยายสิทธิ์ไม่ได้ (S7)
+function _reportScope_(user, p) {
+  var base = _studentScope_(user);
+  if (base !== null) return base;
+  var cls = String((p && p.class_level) || '').trim(), room = String((p && p.room) || '').trim();
+  if (!cls && !room) return null;
+  return function (stu) { return (!cls || String(stu.class_level) === cls) && (!room || String(stu.room) === room); };
+}
+function _reportFilterInfo_(user, p) {
+  if (_studentScope_(user) !== null) return { class_level: String(user.advisor_class || ''), room: String(user.advisor_room || ''), fixed: true };
+  return { class_level: String((p && p.class_level) || '').trim(), room: String((p && p.room) || '').trim(), fixed: false };
+}
 
 // ── Daily dashboard ────────────────────────────────────────────
 function Reports_dashboard(user, p) {
   Auth_requireCap(user, 'report.view_own|report.view_all');
   var date = cfg_dateOnly_((p && p.date)) || cfg_today_();
-  var scope = _studentScope_(user), stuIx = DB_buildIndexLite(SHEETS.STUDENTS), map = Settings_map_();
+  var scope = _reportScope_(user, p), stuIx = DB_buildIndexLite(SHEETS.STUDENTS), map = Settings_map_();
   function inScope(sid) { var s = stuIx[String(sid)]; return s && (!scope || scope(s)); }
   function mapName(sid) { var s = stuIx[String(sid)]; return { name: s ? _stuName_(s) : '(ไม่พบ)', cr: s ? _stuClassRoom_(s) : '', adv: s ? s.advisor_name : '' }; }
 
@@ -62,7 +75,7 @@ function Reports_dashboard(user, p) {
     date: date,
     kpi: { late: late.length, leave: leave.length, behavior: behavior.length, deduct: deductToday, at_risk: atRisk.length },
     late: late.slice(0, 30), leave: leave.slice(0, 30), behavior: behavior.slice(0, 30),
-    trend: trend, at_risk: atRisk, scope: _reportScopeKey_(user)
+    trend: trend, at_risk: atRisk, scope: _reportScopeKey_(user), filter: _reportFilterInfo_(user, p)
   };
 }
 
@@ -103,7 +116,7 @@ function Reports_room(user, p) {
   Auth_requireCap(user, 'report.view_own|report.view_all');
   p = p || {};
   var from = cfg_dateOnly_(p.from) || '', to = cfg_dateOnly_(p.to) || '';
-  var scope = _studentScope_(user), stuIx = DB_buildIndexLite(SHEETS.STUDENTS);
+  var scope = _reportScope_(user, p), stuIx = DB_buildIndexLite(SHEETS.STUDENTS);
   function inRange(d) { d = cfg_d10_(d); return (!from || d >= from) && (!to || d <= to); }
   var rooms = {};
   DB_readLite(SHEETS.STUDENTS).forEach(function (s) {
@@ -123,7 +136,7 @@ function Reports_room(user, p) {
   DB_readLite(SHEETS.BEHAVIOR).forEach(function (r) { if (!_yes_(r.canceled) && r.kind === 'deduct' && inRange(r.date)) bump(r.student_id, 'deduct', -cfg_num_(r.points)); });
   var list = Object.keys(rooms).map(function (k) { return rooms[k]; })
     .sort(function (a, b) { return (cfg_num_(a.class_level) - cfg_num_(b.class_level)) || (cfg_num_(a.room) - cfg_num_(b.room)); });
-  return { rooms: list, from: from, to: to,
+  return { rooms: list, from: from, to: to, filter: _reportFilterInfo_(user, p),
     totals: list.reduce(function (t, r) { t.students += r.students; t.late += r.late; t.leave += r.leave; t.deduct += r.deduct; t.points += r.points; return t; }, { students: 0, late: 0, leave: 0, deduct: 0, points: 0 }) };
 }
 
@@ -134,7 +147,7 @@ function Reports_period(user, p) {
   var to = cfg_dateOnly_(p.to) || cfg_today_();
   var fromD = new Date(new Date(to + 'T00:00:00').getTime() - 29 * 86400000);
   var from = cfg_dateOnly_(p.from) || Utilities.formatDate(fromD, APP.TIMEZONE, 'yyyy-MM-dd');
-  var scope = _studentScope_(user), stuIx = DB_buildIndexLite(SHEETS.STUDENTS);
+  var scope = _reportScope_(user, p), stuIx = DB_buildIndexLite(SHEETS.STUDENTS);
   function ok(sid, d) { d = cfg_d10_(d); if (d < from || d > to) return false; var s = stuIx[String(sid)]; return s && (!scope || scope(s)); }
   // build day buckets
   var days = [], dayIx = {};
@@ -166,7 +179,7 @@ function Reports_period(user, p) {
     return { id: sid, name: s ? _stuName_(s) : sid, class_room: s ? _stuClassRoom_(s) : '', late: v.late, leave: v.leave, deduct: v.deduct, points: v.points, total: v.late + v.leave + v.deduct };
   }).sort(function (a, b) { return b.total - a.total; }).slice(0, 15);
   return {
-    from: from, to: to,
+    from: from, to: to, filter: _reportFilterInfo_(user, p),
     kpi: { late: totLate, leave: totLeave, deduct: totDeduct, points: totPoints, days: days.length },
     days: days, late_reasons: topN(lateReasons, 8), leave_reasons: topN(leaveReasons, 8),
     offenses: topN(offenses, 8), top_students: topStudents

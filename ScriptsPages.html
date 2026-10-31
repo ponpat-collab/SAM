@@ -1,6 +1,6 @@
 <!-- ═══════════════════════════════════════════════════════════════
   ระบบงานปกครองนักเรียน (SAM) · ScriptsPages.html — แดชบอร์ด · สแกนมาสาย/ลากลับ/หักคะแนน
-  Version: 1.0.0 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Version: 1.1.1 (2026-10-31) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
   Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
 ═══════════════════════════════════════════════════════════════ -->
 <script type="text/x-sam" id="sam-pages">
@@ -22,11 +22,14 @@
   A.emptyBox = emptyBox; A.hero = hero;
 
   // ═══ DASHBOARD ═══
+  var DASH = { cls: '', room: '' };   // ตัวกรองห้อง (เฉพาะ role ที่เห็นทั้งโรงเรียน) — คงค่าไว้ระหว่างรีเฟรช
   function renderDashboard() {
     var p = page(); p.innerHTML = loadingPage();
-    call('report.dashboard', {}).then(function (d) {
+    call('report.dashboard', { class_level: DASH.cls, room: DASH.room }).then(function (d) {
       if (!page()) return;
-      var u = Store.user, k = d.kpi;
+      var u = Store.user, k = d.kpi, fl = A.roomFilter.label(DASH);
+      var filt = A.roomFilter.show() ? '<div class="panel sd-no-print" style="padding:12px 16px"><div class="toolbar" style="margin-bottom:0"><span style="font-weight:600;font-size:13px;color:var(--ink2)"><i class="bi bi-funnel"></i> ดูเฉพาะห้อง</span>' +
+        A.roomFilter.html('db') + (fl ? '<span class="badge b-info">' + esc(fl) + '</span><button class="btn btn-ghost btn-sm" id="db-clear"><i class="bi bi-x-lg"></i> ดูทั้งหมด</button>' : '') + '</div></div>' : '';
       var kpis = [
         { i: 'clock-history', v: fmt.num(k.late), l: 'มาสายวันนี้' },
         { i: 'house-heart', v: fmt.num(k.leave), l: 'ลากลับวันนี้' },
@@ -37,7 +40,8 @@
       var quick = quickActions();
       var trend = A.svgLine(d.trend, { keys: [{ key: 'late', color: '#2563eb', label: 'มาสาย' }, { key: 'leave', color: '#0ea5e9', label: 'ลากลับ' }] });
       p.innerHTML =
-        hero({ i: 'shield-check', t: TH.dateWeekday(d.date) }, greeting() + ' · คุณ' + u.full_name.replace(/^(นาย|นาง|นางสาว)/, ''), 'ภาพรวมงานปกครองประจำวันของ' + (Store.boot.app.org || 'โรงเรียน'), kpis) +
+        hero({ i: 'shield-check', t: TH.dateWeekday(d.date) }, greeting() + ' · คุณ' + u.full_name.replace(/^(นาย|นาง|นางสาว)/, ''), 'ภาพรวมงานปกครองประจำวันของ' + (Store.boot.app.org || 'โรงเรียน') + (fl ? ' · เฉพาะ ' + fl : ''), kpis) +
+        filt +
         (quick ? '<div class="panel"><div class="panel-h"><div class="pi"><i class="bi bi-lightning-charge-fill"></i></div><div class="pt">เมนูด่วน</div></div><div class="app-grid">' + quick + '</div></div>' : '') +
         (d.at_risk.length ? '<div class="panel" style="border-left:4px solid var(--danger)"><div class="panel-h"><div class="pi" style="background:#fef2f2;color:#dc2626"><i class="bi bi-exclamation-octagon-fill"></i></div><div class="pt">นักเรียนคะแนนสะสมถึงเกณฑ์</div><div class="right"><span class="badge b-danger">' + d.at_risk.length + ' คน</span></div></div>' +
           '<div class="stu-grid">' + d.at_risk.slice(0, 8).map(function (s) { return riskCard(s); }).join('') + '</div></div>' : '') +
@@ -48,6 +52,8 @@
         '<div class="grid-2">' + feedPanel('มาสายล่าสุด', 'clock-history', 'g-amber', d.late, 'late') + feedPanel('ลากลับล่าสุด', 'house-heart', 'g-sky', d.leave, 'leave') + '</div>' +
         (d.behavior.length ? '<div class="panel"><div class="panel-h"><div class="pi" style="background:#fef2f2;color:#dc2626"><i class="bi bi-star-fill"></i></div><div class="pt">บันทึกพฤติกรรมวันนี้</div></div>' + behaviorFeed(d.behavior) + '</div>' : '');
       $$('.stu-card', p).forEach(function (c) { c.addEventListener('click', function () { A.navTo('#/report/student?id=' + c.getAttribute('data-sid')); }); });
+      A.roomFilter.wire('db', DASH, renderDashboard);
+      var cb = $('#db-clear'); if (cb) cb.addEventListener('click', function () { DASH.cls = ''; DASH.room = ''; renderDashboard(); });
     }).catch(function (e) { if (page()) page().innerHTML = emptyBox('wifi-off', 'โหลดแดชบอร์ดไม่สำเร็จ', e.message); });
   }
   function statMini(icon, grad, val, lb) { return '<div class="stat"><div class="stat-ic ' + grad + '"><i class="bi bi-' + icon + '"></i></div><div class="stat-val">' + fmt.num(val) + '</div><div class="stat-lb">' + esc(lb) + '</div></div>'; }

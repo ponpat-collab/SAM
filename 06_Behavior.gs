@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        06_Behavior.gs — คะแนนความประพฤติสะสม (เริ่ม 0 นับขึ้น) + ฐานความผิด (ตั้งค่าได้)
- *  Version:     1.1.0
- *  Last Update: 2026-09-16
+ *  Version:     1.1.1
+ *  Last Update: 2026-10-31
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -33,6 +33,7 @@ function _recomputeScore_(sid) {
 function Offenses_list(user, p) {
   var activeOnly = !(p && p.all);
   var rows = DB_readAll(SHEETS.OFFENSES).slice();
+  var nextCode = _nextOffenseCode_(rows);                         // เสนอรหัสถัดไปให้ UI prefill (ผู้ใช้ไม่ต้องคิดเอง)
   if (activeOnly) rows = rows.filter(function (r) { return _yes_(r.is_active); });
   rows.sort(function (a, b) { return (cfg_num_(a.sort_order) - cfg_num_(b.sort_order)) || String(a.code).localeCompare(String(b.code)); });
   var usage = {};
@@ -41,27 +42,40 @@ function Offenses_list(user, p) {
     return { code: r.code, name: r.name, category: r.category, points: cfg_num_(r.points),
       icon: r.icon || 'exclamation-triangle', color: r.color || '#f43f5e',
       is_active: _yes_(r.is_active), sort_order: cfg_num_(r.sort_order), usage: usage[r.name] || 0 };
-  }) };
+  }), next_code: nextCode };
+}
+// รหัสถัดไปแบบ B01,B02,… (max เลขท้ายของรหัสรูปแบบ B<n> + 1) — ใช้ทั้ง list (เสนอ) และ save (เว้นว่าง)
+function _nextOffenseCode_(rows) {
+  var mx = 0;
+  (rows || DB_readAll(SHEETS.OFFENSES)).forEach(function (r) { var m = /^B(\d+)$/i.exec(String(r.code || '')); if (m) mx = Math.max(mx, Number(m[1])); });
+  var n = mx + 1;
+  return 'B' + (n < 10 ? '0' + n : String(n));
 }
 function Offenses_save(user, p) {
   Auth_requireCap(user, 'offense.manage');
-  var code = String((p && p.code) || '').trim().toUpperCase();
+  // ★ normalize: ตัดช่องว่าง + uppercase · สร้างใหม่แล้วเว้นว่าง = ระบบตั้งรหัสถัดไปให้ (pitfall "Free-text technical key field")
+  var code = String((p && p.code) || '').replace(/\s+/g, '').toUpperCase();
   var isNew = !!(p && p.is_new);
-  if (!code || !/^[A-Z0-9_-]{1,10}$/.test(code)) throw new Error('รหัสฐานความผิดต้องเป็น A-Z 0-9 (1-10 ตัว)');
+  if (code && !/^[A-Z0-9_-]{1,10}$/.test(code)) throw new Error('รหัสฐานความผิดใช้ได้เฉพาะตัวอักษรอังกฤษ A-Z และตัวเลข 0-9 ไม่เกิน 10 ตัว (เช่น B08) — หรือเว้นว่างให้ระบบตั้งให้');
+  if (!code && !isNew) throw new Error('ไม่ระบุรหัสฐานความผิด');
   var d = {
-    code: code, name: cfg_str_(p && p.name, 120).trim(), category: cfg_str_(p && p.category, 40).trim() || 'ทั่วไป',
+    name: cfg_str_(p && p.name, 120).trim(), category: cfg_str_(p && p.category, 40).trim() || 'ทั่วไป',
     points: Math.abs(cfg_int_(p && p.points)) || 0, icon: cfg_str_(p && p.icon, 40).trim() || 'exclamation-triangle',
     color: cfg_str_(p && p.color, 20).trim() || '#f43f5e', is_active: _yes_(p && p.is_active) ? 'yes' : 'no',
     sort_order: cfg_int_(p && p.sort_order) || 0
   };
   if (!d.name) throw new Error('กรุณากรอกชื่อฐานความผิด');
   DB_withLock_(function () {
+    _freshVer_();                                                  // อ่านสดในล็อก — กัน 2 คนได้รหัสถัดไปซ้ำกัน
+    if (!code) code = _nextOffenseCode_();
+    d.code = code;
+    if (isNew && !d.sort_order) d.sort_order = DB_rowCount(SHEETS.OFFENSES) + 1;   // ต่อท้ายรายการ ไม่ใช่ขึ้นหน้า
     var exist = DB_getFresh(SHEETS.OFFENSES, code);
-    if (isNew) { if (exist) throw new Error('รหัส ' + code + ' มีอยู่แล้ว'); DB_insert(SHEETS.OFFENSES, d); }
+    if (isNew) { if (exist) throw new Error('รหัส ' + code + ' มีอยู่แล้ว — ลองรหัสอื่นหรือเว้นว่างให้ระบบตั้งให้'); DB_insert(SHEETS.OFFENSES, d); }
     else { if (!exist) throw new Error('ไม่พบฐานความผิด'); DB_update(SHEETS.OFFENSES, code, d); }
   });
   Audit_log_(user, isNew ? 'offense.create' : 'offense.update', 'offense', code, {});
-  return { ok: true };
+  return { ok: true, code: code };
 }
 function Offenses_delete(user, p) {
   Auth_requireCap(user, 'offense.manage');

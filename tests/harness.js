@@ -166,6 +166,20 @@ try { api('student.lookup', advLg.token, { id: '40002' }); ok(false, 'advisor sh
 // ครู A (advisor 3/1) ไม่เห็นห้อง B (3/2) — S7 regression
 var advDash = api('report.dashboard', advLg.token, {});
 ok(advDash.scope !== 'all', 'advisor dashboard scoped');
+// ── v1.1.1: ตัวกรองห้องของรายงาน (admin = narrowing · advisor ส่ง filter นอกห้อง → ยังเห็นแค่ห้องตน) ──
+var rr31 = api('report.room', adminTok, { class_level: '3', room: '1' });
+ok(rr31.rooms.length === 1 && rr31.rooms[0].class_level === '3' && rr31.rooms[0].room === '1', 'report.room admin กรอง ม.3/1 → 1 ห้อง');
+ok(rr31.filter && rr31.filter.class_level === '3' && rr31.filter.room === '1' && rr31.filter.fixed === false, 'report.room ส่ง filter info (fixed=false)');
+var rr3 = api('report.room', adminTok, { class_level: '3' });
+ok(rr3.rooms.length >= 2 && rr3.rooms.every(function (r) { return r.class_level === '3'; }), 'report.room admin กรองเฉพาะชั้น ม.3 → ทุกห้องเป็น ม.3');
+var dashAll = api('report.dashboard', adminTok, {}), dash31 = api('report.dashboard', adminTok, { class_level: '3', room: '1' });
+ok(dash31.kpi.late >= 1 && dash31.kpi.late <= dashAll.kpi.late && dash31.late.every(function (r) { return r.class_room === 'ม.3/1'; }), 'report.dashboard admin กรอง ม.3/1 → รายการเฉพาะห้องนั้น (' + dash31.kpi.late + '/' + dashAll.kpi.late + ')');
+var pAll = api('report.period', adminTok, {}), p31 = api('report.period', adminTok, { class_level: '3', room: '1' });
+ok(p31.kpi.late >= 1 && p31.kpi.late <= pAll.kpi.late && p31.top_students.every(function (s) { return s.class_room === 'ม.3/1'; }), 'report.period admin กรอง ม.3/1');
+var advRoom4 = api('report.room', advLg.token, { class_level: '4', room: '1' });
+ok(advRoom4.rooms.length >= 1 && advRoom4.rooms.every(function (r) { return r.class_level === '3' && r.room === '1'; }) && advRoom4.filter.fixed === true, '★ advisor ส่ง filter ม.4/1 → ยังเห็นเฉพาะ 3/1 (narrowing ขยายสิทธิ์ไม่ได้)');
+var advDash4 = api('report.dashboard', advLg.token, { class_level: '4', room: '1' });
+ok(advDash4.late.length >= 1 && advDash4.late.every(function (r) { return r.class_room === 'ม.3/1'; }) && advDash4.filter.fixed === true, 'advisor dashboard filter นอกห้อง → ยัง scope ห้องตน');
 
 // offense mgmt
 var of = api('offense.save', adminTok, { is_new: true, code: 'B99', name: 'ทดสอบ', category: 'ทดสอบ', points: 15, is_active: true });
@@ -175,6 +189,19 @@ var offList = api('offense.list', adminTok, { all: 1 });
 ok(offList.items.some(function (o) { return o.code === 'B99' && !o.is_active; }), 'offense toggle off');
 api('offense.delete', adminTok, { code: 'B99' });
 ok(!DB_get(SHEETS.OFFENSES, 'B99'), 'offense delete');
+// ── v1.1.1: รหัสฐานความผิด — เสนอให้/normalize/เว้นว่าง (เคสลูกค้า "ตรงรหัสสร้างไม่ได้") ──
+var ofl = api('offense.list', adminTok, { all: 1 });
+ok(ofl.next_code === 'B08', 'offense.list เสนอ next_code=B08 (' + ofl.next_code + ')');
+var auto = api('offense.save', adminTok, { is_new: true, code: '', name: 'เว้นว่าง', points: 5, is_active: true });
+ok(auto.code === 'B08' && !!DB_get(SHEETS.OFFENSES, 'B08'), 'เว้นรหัสว่าง → ระบบตั้ง B08 ให้ (' + auto.code + ')');
+ok(cfg_num_(DB_get(SHEETS.OFFENSES, 'B08').sort_order) === 8, 'รหัสใหม่ต่อท้ายรายการ (sort_order=8)');
+var norm = api('offense.save', adminTok, { is_new: true, code: ' b 10 ', name: 'ช่องว่าง+ตัวเล็ก', points: 5, is_active: true });
+ok(norm.code === 'B10' && !!DB_get(SHEETS.OFFENSES, 'B10'), 'รหัส " b 10 " → normalize เป็น B10');
+try { api('offense.save', adminTok, { is_new: true, code: 'ข08', name: 'ไทย', points: 5 }); ok(false, 'รหัสภาษาไทยต้องถูกปฏิเสธ'); }
+catch (e) { ok(/A-Z/.test(e.message) && /เว้นว่าง/.test(e.message), 'รหัสไทย → error บอกวิธีแก้ (เว้นว่างให้ระบบตั้ง)'); }
+ok(api('offense.list', adminTok, { all: 1 }).next_code === 'B11', 'next_code เดินต่อจากเลขสูงสุด (B11)');
+api('offense.delete', adminTok, { code: 'B08' }); api('offense.delete', adminTok, { code: 'B10' });
+ok(!DB_get(SHEETS.OFFENSES, 'B08') && !DB_get(SHEETS.OFFENSES, 'B10'), 'ลบรหัสทดสอบคืนสภาพ');
 
 // settings
 var setUp = api('setting.update', adminTok, { settings: { org_name: 'โรงเรียนทดสอบ', alert_level_1: '70' } });

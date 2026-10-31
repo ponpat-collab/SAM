@@ -1,6 +1,6 @@
 <!-- ═══════════════════════════════════════════════════════════════
   ระบบงานปกครองนักเรียน (SAM) · ScriptsCore.html — runtime · design system · shell · login
-  Version: 1.0.0 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Version: 1.1.1 (2026-10-31) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
   Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
 ═══════════════════════════════════════════════════════════════ -->
 <script type="text/x-sam" id="sam-core">
@@ -96,6 +96,43 @@
     });
   }
   A.call = call;
+
+  // ── ตัวกรองชั้น/ห้องของรายงาน (ใช้ร่วม 3 หน้า) · แสดงเฉพาะ role ที่เห็นทั้งโรงเรียน (advisor ถูก scope ห้องตนอยู่แล้ว) ──
+  var CR_CACHE = null;   // {classes, rooms} โหลดครั้งเดียวต่อ session · invalidate เมื่อ student.save/import
+  A.loadClassrooms = function (force) {
+    if (!force && CR_CACHE) return Promise.resolve(CR_CACHE);
+    return call('student.classrooms', {}).then(function (d) { CR_CACHE = d; return d; });
+  };
+  A.invalidateClassrooms = function () { CR_CACHE = null; };
+  A.roomFilter = {
+    show: function () { return hasCap('report.view_all'); },
+    html: function (pfx) {
+      if (!A.roomFilter.show()) return '';
+      return '<select class="select" id="' + pfx + '-cls" style="max-width:120px" aria-label="ชั้น"><option value="">ทุกชั้น</option></select>' +
+        '<select class="select" id="' + pfx + '-room" style="max-width:110px" aria-label="ห้อง"><option value="">ทุกห้อง</option></select>';
+    },
+    label: function (st) {
+      if (!st.cls && !st.room) return '';
+      if (st.cls && st.room) return 'ม.' + st.cls + '/' + st.room;
+      return st.cls ? 'ม.' + st.cls + ' ทุกห้อง' : 'ห้อง ' + st.room + ' ทุกชั้น';
+    },
+    wire: function (pfx, st, onChange) {
+      var cs = $('#' + pfx + '-cls'), rs = $('#' + pfx + '-room'); if (!cs || !rs) return;
+      function fillRooms(d) {
+        var seen = {}, rooms = (d.rooms || []).filter(function (r) { if (st.cls && r.class_level !== st.cls) return false; if (seen[r.room]) return false; seen[r.room] = 1; return true; });
+        if (st.room && !seen[st.room]) st.room = '';
+        rs.innerHTML = '<option value="">ทุกห้อง</option>' + rooms.map(function (r) { return '<option value="' + esc(r.room) + '"' + (r.room === st.room ? ' selected' : '') + '>ห้อง ' + esc(r.room) + '</option>'; }).join('');
+      }
+      function fill(d) {
+        if (!$('#' + pfx + '-cls')) return;   // หน้าถูกเปลี่ยนระหว่างรอ
+        cs.innerHTML = '<option value="">ทุกชั้น</option>' + (d.classes || []).map(function (c) { return '<option value="' + esc(c) + '"' + (c === st.cls ? ' selected' : '') + '>ม.' + esc(c) + '</option>'; }).join('');
+        fillRooms(d);
+      }
+      cs.addEventListener('change', function () { st.cls = cs.value; st.room = ''; fillRooms(CR_CACHE || { rooms: [] }); onChange(); });
+      rs.addEventListener('change', function () { st.room = rs.value; onChange(); });
+      A.loadClassrooms().then(fill).catch(function () {});
+    }
+  };
 
   // ── Toast ──
   function toast(msg, type, dur) {
@@ -323,6 +360,17 @@
     document.addEventListener('click', onClick, true);
     window.addEventListener('hashchange', dispatch);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { Modal.close(); closeAllPops(); closeManual(); } });
+    // Enter ในฟอร์ม modal ที่ opt-in (data-enter-save) = กดปุ่มหลักของ modal — ฟอร์มที่มี input หลายช่องไม่ implicit-submit อยู่แล้ว
+    // จึงต้องทำเอง · opt-in เพื่อไม่กระทบฟอร์มที่สแกนบาร์โค้ด (Enter จากเครื่องยิงจะบันทึกก่อนกรอกครบ)
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      var t = e.target; if (!t || !t.closest || t.tagName !== 'INPUT') return;
+      if (t.type === 'checkbox' || t.type === 'radio' || t.type === 'file') return;
+      var f = t.closest('#modal-host form[data-enter-save]'); if (!f) return;
+      e.preventDefault();
+      var btn = document.querySelector('#modal-host .md-footer .btn-primary');
+      if (btn && !btn.disabled) btn.click();
+    });
     window.addEventListener('resize', function () { if (window.innerWidth > 1024) closeSidebar(); });
   }
   A.wireGlobal = wireGlobal;
