@@ -1,6 +1,6 @@
 <!-- ═══════════════════════════════════════════════════════════════
   ระบบงานปกครองนักเรียน (SAM) · Styles2.html — หน้าจอ · กราฟ · รายงาน · พิมพ์ · mobile
-  Version: 1.0.0 · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Version: 1.1.3 (2026-11-06) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
   Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
 ═══════════════════════════════════════════════════════════════ -->
 <style>
@@ -188,6 +188,8 @@
 /* ★ ทุก rule ที่ซ่อนแอปต้อง scope ใต้ body.prt-on (ใส่ตอนสร้างเอกสารพิมพ์เท่านั้น)
    ถ้าเขียนแบบ global แล้วมีที่ไหนเรียก window.print() โดยไม่สร้าง .pr-only → หน้าพิมพ์จะว่างเปล่า */
 @media print{
+  /* ★ body เป็น scroll box จาก html,body{height:100%}+overflow-x:hidden → Chrome พิมพ์ได้หน้าเดียว (pitfall v1.1.3) — ต้องปลดตอนพิมพ์เสมอ */
+  html,body{height:auto!important;overflow:visible!important;max-width:none!important}
   body{background:#fff!important}
   body.prt-on #app-root, body.prt-on #modal-host, body.prt-on #spin-host, body.prt-on #boot-loader{display:none!important}
   .navbar,.sidebar,.app-footer,.bottom-nav,.sb-backdrop,.toolbar,.pager,.sd-no-print{display:none!important}

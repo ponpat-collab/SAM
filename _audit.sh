@@ -447,6 +447,21 @@ if(bad.length){ bad.forEach(function(x){ console.log("  ✗ "+x); }); process.ex
 console.log("  ✓ _migrate_ ผูกครบ doGet/api/_warm_ (หลัง _resetReq_ ก่อนอ่านข้อมูล) · มีล็อก + ตรวจซ้ำ + flag + ไม่ล้มเงียบ");
 ' || FAIL=1
 
+# ── 38) พิมพ์ได้ครบทุกหน้า — body ห้ามเป็น scroll box ตอน print (pitfall v1.1.3: html,body{height:100%}+overflow-x:hidden → Chrome พิมพ์หน้าเดียว) ──
+echo "─38) print pagination (html,body ต้อง height:auto;overflow:visible ใน @media print + นับหน้า PDF จริง)"
+BASE_CSS=$(cat Styles.html Styles2.html)
+PR_BLOCK=$(awk '/@media print\{/{f=1} f{print} f&&/^\}/{exit}' Styles2.html)
+if echo "$BASE_CSS" | grep -qE 'html,body\{[^}]*height:100%|body\{[^}]*overflow(-x)?:hidden'; then
+  if echo "$PR_BLOCK" | grep -qE 'html,body\{[^}]*height:auto!important[^}]*overflow:visible!important'; then echo "  ✓ @media print รีเซ็ต html,body เป็น height:auto;overflow:visible (!important)"
+  else echo "  ✗ base CSS ทำให้ body เป็น scroll box แต่ @media print ไม่ได้รีเซ็ต html,body{height:auto!important;overflow:visible!important} → พิมพ์ได้หน้าเดียว"; FAIL=1; fi
+fi
+PP=$(bash tests/print_pages.sh 2>/dev/null | tail -1)
+case "$PP" in
+  "SKIP no-chrome") echo "  ⚠ ไม่มี Chrome — ข้ามการนับหน้า PDF (ตรวจ static แล้ว)";;
+  PAGES*) N=${PP#PAGES }; if [ "${N:-0}" -ge 2 ]; then echo "  ✓ tests/print_pages.sh: เอกสาร 80 แถว → $N หน้า"; else echo "  ✗ tests/print_pages.sh: เอกสาร 80 แถวพิมพ์ได้ $N หน้า (ต้อง ≥ 2)"; FAIL=1; fi;;
+  *) echo "  ✗ tests/print_pages.sh รันไม่ได้: $PP"; FAIL=1;;
+esac
+
 echo "════════════════════════════════════════"
 if [ $FAIL -eq 0 ]; then
   echo "✅ AUDIT ผ่านครบทุกด่าน — พร้อม deploy"

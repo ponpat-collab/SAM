@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        03_Students.gs — ข้อมูลนักเรียน · lookup บาร์โค้ด · CRUD · import
- *  Version:     1.1.0
- *  Last Update: 2026-09-16
+ *  Version:     1.1.3
+ *  Last Update: 2026-11-06
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -74,7 +74,7 @@ function Students_list(user, p) {
   var q = String(p.q || '').trim().toLowerCase();
   var cls = String(p.class_level || ''), room = String(p.room || ''), status = String(p.status || '');
   var sort = String(p.sort || 'class');
-  var page = Math.max(1, cfg_int_(p.page) || 1), per = Math.min(100, cfg_int_(p.per_page) || 50);
+  var page = Math.max(1, cfg_int_(p.page) || 1), per = Math.min(1000, cfg_int_(p.per_page) || 50);
   var scope = _studentScope_(user);
   var map = Settings_map_();
   var rows = DB_readLite(SHEETS.STUDENTS).filter(function (s) {

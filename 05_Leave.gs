@@ -2,8 +2,8 @@
  * ═══════════════════════════════════════════════════════════════
  *  ระบบงานปกครองนักเรียน · Student Affairs Management System (SAM)
  *  File:        05_Leave.gs — บันทึกขออนุญาตกลับบ้าน (ลากลับ) + รูปผู้มารับ
- *  Version:     1.0.0
- *  Last Update: 2026-07-13
+ *  Version:     1.1.3
+ *  Last Update: 2026-11-06
  *  Developer:   ครูวิรัตน์  หาดคำ · www.kruwirat.com
  *  License:     Proprietary · © 2026
  *  Notice:      ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
@@ -52,7 +52,7 @@ function Leave_list(user, p) {
   p = p || {};
   var from = cfg_dateOnly_(p.from) || '', to = cfg_dateOnly_(p.to) || '', sid = String(p.student_id || '');
   var cls = String(p.class_level || ''), room = String(p.room || ''), q = String(p.q || '').trim().toLowerCase();
-  var page = Math.max(1, cfg_int_(p.page) || 1), per = Math.min(100, cfg_int_(p.per_page) || 40);
+  var page = Math.max(1, cfg_int_(p.page) || 1), per = Math.min(1000, cfg_int_(p.per_page) || 40);
   var stuIx = DB_buildIndexLite(SHEETS.STUDENTS), scope = _studentScope_(user);
   var rows = DB_readLite(SHEETS.LEAVE).filter(function (r) {
     if (_yes_(r.canceled) && !p.include_canceled) return false;

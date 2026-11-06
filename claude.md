@@ -16064,3 +16064,31 @@ for tf in tests/*.js; do node "$tf" || exit 1; done
   **เทคนิค `DB_deleteWhere_` "เก็บแถวแรก":** helper ไล่จากล่างขึ้นบน → closure นับจำนวนที่เจอต่อ key แล้ว return `seen[k] < total[k]` → ลบ (total-1) แถวล่าง เหลือแถวบนสุด (สร้างก่อน) — ไม่ต้องอ่านเลขแถว
   **กฎเหล็ก:** แก้ seed ให้ idempotent = กันอนาคต · **ข้อมูลซ้ำที่เกิดไปแล้วในทุก fork ของลูกค้าต้องมี migration dedupe คู่กันเสมอ** (ลูกค้าไม่รู้ว่าต้อง "ล้าง" อะไร) · migration ที่ลบข้อมูลต้องมีเกณฑ์ "ไม่มีประวัติอ้างถึง" ไม่งั้นปิดใช้งานแทนลบ
   **เคสครอบคลุม (≥5):** master data ซ้ำ (offense/category/room) · user ซ้ำจาก seed · setting key ซ้ำใน EAV · import ไฟล์เดิม 2 รอบ · demo rows ซ้ำ — ทุกชีตลูกค้าที่ผ่าน seed รุ่นที่ยังไม่ idempotent
+
+## 🗂️ Session Pitfalls — SAM v1.1.3 (2026-11-06) — พิมพ์รายงานได้หน้าเดียว
+
+- **`html,body{height:100%}` + `body{overflow-x:hidden}` → body กลายเป็น scroll container สูงเท่าจอ → Chrome พิมพ์เฉพาะหน้าแรก — "มาสาย 27 แต่รายงานสร้างมาให้แค่ 1 หน้า ข้อมูลไม่ครบ"**
+  **เคสจริง (SAM · ลูกค้าบรรหารแจ่มใส 3 รายงาน 2026-11-06):** กด "พิมพ์กระดานวันนี้" ที่มีมาสาย 27 รายการ → print preview/PDF ออกมา **1 หน้า** แถวท้าย ๆ + ช่องลงนามหายไปเฉย ๆ · ไม่มี error · `Board_today` คืนครบ 27 (ไม่ได้ slice) · `A.printDoc` สร้าง `.pr-only` ครบทุกแถว (ตรวจใน DOM เห็นครบ) · แต่ที่พิมพ์ออกมาขาด
+  **Reproduce (headless Chrome · CSS จริงของระบบ):** 27 แถว → `1 หน้า` · 80 แถว → `1 หน้า` (ไม่ว่าจะกี่แถวก็หน้าเดียว) · ใส่ `html,body{height:auto!important;overflow:visible!important}` ใน `@media print` → 2 และ 3 หน้าตามจริง · minimal HTML ที่มีแค่ `height:100%` อย่างเดียว **ไม่** reproduce — ต้องมี `overflow-x:hidden` บน body ด้วย
+  **สาเหตุระดับลึก (CSS spec):** `overflow-x:hidden` + `overflow-y:visible` เป็นคู่ที่ spec ไม่อนุญาต → browser บังคับ `overflow-y` เป็น `auto` → body กลายเป็น **scroll container** · ประกอบกับ `html,body{height:100%}` → body สูงเท่าหน้ากระดาษพอดี เนื้อหาที่เกินถูกเก็บไว้ใน scroll (ไม่ใช่ overflow visible ที่ paginate ได้) · ตอน print Chrome ไม่ paginate scroll container → ได้เฉพาะส่วนที่ "มองเห็น" ในกล่อง = หน้าแรก · `#app-root` ถูกซ่อนแล้วก็ไม่ช่วย เพราะตัว body เองคือกล่องที่ตัด
+  **เหตุผลที่ debug ยาก:** (1) ข้อมูลใน DOM ครบ (ตรวจด้วย DevTools เห็น 27 `<tr>`) → คิดว่าเป็น data/slice · (2) รายงานสั้น ๆ (≤20 แถว) พิมพ์ครบ → ระบบดูทำงาน · เจอเฉพาะเมื่อเกิน 1 หน้า · (3) `page-break-inside:avoid` + `thead{display:table-header-group}` เขียนครบ → คิดว่าดูแล pagination แล้ว · (4) ทั้ง `height:100%` และ `overflow-x:hidden` อยู่คนละบรรทัด ดูไม่เกี่ยวกับการพิมพ์ · (5) ไม่มี error/console
+  **ทางแก้ที่ผิด:** `per_page` ใหญ่ขึ้น (ข้อมูลครบอยู่แล้ว) · แบ่งรายงานเป็นหลายชุดให้พอดีหน้า (ซ่อน root cause · รายงานยาวพังอยู่ดี) · ใส่ `page-break-after` ทุก N แถว (ไม่ช่วย · body ยังเป็น scroll box) · เปิด print ใน window ใหม่ (ทำได้แต่ต้อง inline CSS ซ้ำ + popup blocker)
+  **ทางแก้ที่ถูก:** ใน `@media print` ปลดทั้ง 2 เงื่อนไขของ root cause:
+  ```css
+  @media print{
+    html,body{height:auto!important;overflow:visible!important;max-width:none!important}   /* ★ ห้ามเป็น scroll box ตอนพิมพ์ */
+    body.prt-on #app-root{display:none!important}  body.prt-on .pr-only{display:block!important;position:static}
+  }
+  ```
+  `!important` จำเป็นเพราะ `@media (max-width:768px){html,body{overflow-x:hidden}}` (มือถือ) อยู่หลัง print block ใน source order — ผู้ใช้พิมพ์จากมือถือจะโดนทับถ้าไม่ใส่
+  **กฎเหล็ก:** ทุก SPA ที่พิมพ์จากหน้าเดียวกัน (print-overlay pattern · `window.print()` บน document เดิม) — `@media print` **ต้องรีเซ็ต `html,body` เป็น `height:auto;overflow:visible` เสมอ** เพราะ app shell มักตั้ง `height:100%`/`100vh`/`overflow:hidden` เพื่อ layout · เกณฑ์ตรวจ: "ถ้ารายงานยาว 3 หน้า จะออกมากี่หน้า?" — ทดสอบด้วย headless Chrome `--print-to-pdf` แล้วนับ `/Count` ใน PDF ไม่ใช่เชื่อ preview บนเครื่อง dev ที่ข้อมูลน้อย
+  **Audit (ด่าน 38 ใน `_audit.sh`):** static — ถ้า base CSS มี `html,body{...height:100%` หรือ `overflow-x:hidden` บน body → print block ต้องมี `html,body{height:auto!important;overflow:visible!important` · dynamic — `tests/print_pages.sh` สร้างเอกสาร 80 แถวด้วย CSS จริงแล้ว print-to-pdf ด้วย Chrome นับหน้าต้อง ≥ 2 (ข้ามพร้อม ⚠ ถ้าไม่มี Chrome) · negative test: ลบบรรทัด reset → static ตก + pdf = 1 หน้า
+  **Detection signature:** "พิมพ์รายงาน/PDF ได้หน้าเดียวเสมอ ไม่ว่าข้อมูลจะยาวแค่ไหน · DOM มีครบ" → 99% คือ body/html เป็น scroll box (`height:100%`+`overflow` ใด ๆ ที่ไม่ใช่ visible) ตอน print
+  **เคสครอบคลุม (≥5):** กระดานมาสาย/ลากลับรายวัน (เคสนี้) · รายการมาสาย/หักคะแนนตามตัวกรอง (per_page 1000) · รายงานรายห้องทุกห้อง · ใบเสร็จ/บิลหลายใบในรอบ · รายชื่อนักเรียนทั้งชั้น · export รายงานนิเทศ/เกียรติบัตรหลายใบ — ทุก print-overlay ที่เนื้อหาเกิน 1 หน้า บน SPA ที่ shell ตั้ง height/overflow
+
+- **Server `per_page` cap (100) ต่ำกว่าที่ปุ่ม "พิมพ์ทุกรายการ" ขอ (1000) → รายงานยาวถูกตัดเงียบที่ 100 รายการ ทั้งที่หัวรายงานบอก total จริง**
+  **เคสจริง (SAM · พบระหว่างไล่บั๊กพิมพ์หน้าเดียว 2026-11-06):** `recordListPage` ขอ `per_page:1000` เพื่อพิมพ์ "ทุกรายการตามตัวกรอง" แต่ `Late_list/Leave_list/Behavior_list/Students_list` ทำ `Math.min(100, per_page)` → ได้ 100 · หัวรายงานพิมพ์ `d.total` (เช่น 240 รายการ) แต่ตารางมี 100 · ไม่มี warning
+  **สาเหตุ:** cap ของ list ถูกตั้งเพื่อกัน payload ใหญ่ตอน browse (ถูกต้อง) แต่ caller ฝั่ง print ไม่รู้ว่ามี cap · contract "ขอ N ได้ N" ไม่จริง และ client ไม่เทียบ `items.length` กับ `total`
+  **ทางแก้:** (1) ยก cap เป็น 1000 (lite rows ~250B × 1000 = ~250KB ยังต่ำกว่าเพดาน payload) (2) client เทียบ `d.items.length < d.total` → toast เตือน "พิมพ์ได้ X จาก Y รายการ — แคบตัวกรองวัน/ห้อง" ไม่พิมพ์เงียบ
+  **กฎเหล็ก:** endpoint ที่ cap `per_page` ต้องคืน `per_page` ที่ใช้จริง และ caller ที่ตั้งใจ "เอาทั้งหมด" ต้องเทียบ `items.length` กับ `total` แล้วแจ้งผู้ใช้ถ้าไม่ครบ · ห้ามให้หัวรายงานบอกยอดหนึ่งแต่ตารางมีอีกยอด
+  **เคสครอบคลุม (≥5):** พิมพ์รายการตามตัวกรอง · export CSV · bulk select-all · ส่งแจ้งเตือนถึง "ทุกคน" ที่ list ถูก cap · รายงานสรุปที่ดึง list แล้วนับเอง

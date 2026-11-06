@@ -1,6 +1,6 @@
 <!-- ═══════════════════════════════════════════════════════════════
   ระบบงานปกครองนักเรียน (SAM) · ScriptsPages2.html — นักเรียน · รายการ · รายงาน · แอดมิน
-  Version: 1.1.1 (2026-10-31) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
+  Version: 1.1.3 (2026-11-06) · ครูวิรัตน์  หาดคำ · www.kruwirat.com
   Notice: ห้ามจำหน่าย · แบ่งปันเพื่อการศึกษาและต่อยอดเท่านั้น (ใช้เชิงพาณิชย์ต้องได้รับอนุญาตจากผู้พัฒนา)
 ═══════════════════════════════════════════════════════════════ -->
 <script type="text/x-sam" id="sam-pages2">
@@ -178,7 +178,8 @@
         // ดึง "ทุกรายการตามตัวกรอง" ไม่ใช่แค่หน้าที่เปิดอยู่
         return cfg.fetch({ q: st.q, from: st.from, to: st.to, kind: st.kind, page: 1, per_page: 1000 }).then(function (d) {
           if (!d.items.length) { toast('ไม่มีข้อมูลให้พิมพ์', 'warning'); return; }
-          A.printDoc({ title: cfg.title, sub: rangeText(st) + ' · ' + d.total + ' รายการ', html: cfg.prTable(d.items) });
+          if (d.items.length < d.total) toast('พิมพ์ได้ ' + d.items.length + ' จาก ' + d.total + ' รายการ — โปรดแคบช่วงวันที่/ห้องแล้วพิมพ์ใหม่', 'warning', 6000);
+          A.printDoc({ title: cfg.title, sub: rangeText(st) + ' · ' + d.items.length + ' รายการ', html: cfg.prTable(d.items) });
         });
       }, { loading: 'กำลังเตรียมเอกสาร…' }).catch(function () {});
     });
