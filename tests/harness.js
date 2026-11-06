@@ -443,6 +443,36 @@ ok(Number(api('student.lookup', adminTok, { id: '40011' }).student.late_score) =
   ok(rf.ok === true && /boom/.test(warned) && _props['migr:t_fail'] === undefined, 'migration ล้มเหลว → request ไม่พัง + ไม่ตั้ง flag + console.warn');
 })();
 
+// ── ย้ายข้อมูล v1.1.2: แถวซ้ำจาก seed ยุค v1.0.x (ชีตลูกค้าจริง: B01/B04/B07 ×2 · director ×2) ──
+(function () {
+  var MKEY = 'migr:v111_dedupe_seed';
+  function offs(code) { return DB_readAll(SHEETS.OFFENSES).filter(function (o) { return o.code === code; }); }
+  function usersNamed(n) { return DB_readAll(SHEETS.USERS).filter(function (u) { return u.username === n; }); }
+  var b01 = offs('B01')[0];
+  ok(!!b01 && _props[MKEY] === 'done', 'ก่อนทดสอบ: v111 เคยรันแล้วบนชีตไม่มีซ้ำ (no-op) · มี B01');
+  DB_insert(SHEETS.OFFENSES, { code: 'B01', name: 'B01 ซ้ำ (seed รอบ 2)', category: b01.category, points: 99, icon: b01.icon, color: b01.color, is_active: 'yes', sort_order: 1 });
+  DB_insert(SHEETS.OFFENSES, { code: 'B07', name: 'B07 ซ้ำ', category: 'x', points: 1, icon: 'x', color: '#000', is_active: 'yes', sort_order: 7 });
+  var d1 = DB_findOne(SHEETS.USERS, function (u) { return u.username === 'director'; });
+  DB_insert(SHEETS.USERS, { id: 'dup-dir-noref', username: 'director', email: 'd@x', full_name: 'ผอ. ซ้ำ (ไม่มีประวัติ)', password_hash: 'p', salt: 's', role: 'director', advisor_class: '', advisor_room: '', phone: '', is_active: 'yes' });
+  DB_insert(SHEETS.USERS, { id: 'dup-adv-ref', username: 'advisor', email: 'a@x', full_name: 'ที่ปรึกษา ซ้ำ (มีประวัติ)', password_hash: 'p', salt: 's', role: 'advisor', advisor_class: '1', advisor_room: '1', phone: '', is_active: 'yes' });
+  Audit_log_({ id: 'dup-adv-ref', full_name: 'x' }, 'auth.login', 'user', 'dup-adv-ref', {});
+  DB_insert(SHEETS.SESSIONS, { token: 'tok-dup', user_id: 'dup-dir-noref', created_at: cfg_now_(), expires_at: cfg_now_(), ua: '' });
+  ok(offs('B01').length === 2 && usersNamed('director').length === 2, 'สภาพก่อนย้าย: B01 ×2 · director ×2');
+  delete _props[MKEY];
+  var rb = G.api({ action: 'app.bootstrap', token: adminTok, payload: {} });
+  ok(rb.ok === true && _props[MKEY] === 'done', 'request แรก → v111 รัน + ตั้ง flag');
+  ok(offs('B01').length === 1 && offs('B01')[0].name === b01.name && Number(offs('B01')[0].points) === Number(b01.points), '★ B01 เหลือแถวเดียว = แถวแรก (ชื่อ/คะแนนเดิม ไม่ใช่แถว seed รอบ 2)');
+  ok(offs('B07').length === 1 && offs('B07')[0].name !== 'B07 ซ้ำ', 'B07 เหลือแถวแรก');
+  ok(usersNamed('director').length === 1 && usersNamed('director')[0].id === d1.id, 'director ซ้ำที่ไม่มีประวัติ → ถูกลบ · ตัวแรกคงอยู่');
+  var advDup = DB_get(SHEETS.USERS, 'dup-adv-ref');
+  ok(!!advDup && advDup.is_active === 'no', 'advisor ซ้ำที่มีประวัติ (audit) → ไม่ลบ แต่ปิดใช้งาน');
+  ok(!DB_get(SHEETS.SESSIONS, 'tok-dup'), 'session ของบัญชีซ้ำถูกลบ');
+  ok(DB_readAll(SHEETS.AUDIT).filter(function (r) { return r.action === 'migrate.v111'; }).length === 1, 'บันทึก audit migrate.v111 1 ครั้ง');
+  G.api({ action: 'app.bootstrap', token: adminTok, payload: {} });
+  ok(DB_readAll(SHEETS.AUDIT).filter(function (r) { return r.action === 'migrate.v111'; }).length === 1, 'request ถัดไปไม่รันซ้ำ');
+  DB_delete(SHEETS.USERS, 'dup-adv-ref');
+})();
+
 // ── ล้างข้อมูลตัวอย่าง: ลบนักเรียนตัวอย่าง "พร้อมประวัติ" · ไม่แตะรหัสจริงที่ขึ้นต้นด้วย 3 ──
 (function () {
   function cnt(sheet, sid) { return DB_readAll(sheet).filter(function (r) { return String(r.student_id) === sid; }).length; }
