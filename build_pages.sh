@@ -4,7 +4,7 @@
 # ไม่กระทบการรันบน GAS Web App: Index.html/partials ไม่ถูกแก้ · แค่ประกอบใหม่เป็น static
 cd "$(dirname "$0")" || exit 1
 
-EXEC="https://script.google.com/macros/s/AKfycbwHPVbFjqNnFnodwdXpxnZvpHREkzN6br3PZQZNq9BwHFutv-e7-kQt68pYe9nGGoU7/exec"
+EXEC="https://script.google.com/macros/s/AKfycbz-qotec1hAZpt7cRh6fjrVX18kNpCaZt41OtyPPCnm7fWJsG2ZvVpIRrz5SYCJCOeopg/exec"
 
 node -e '
 var fs = require("fs");
