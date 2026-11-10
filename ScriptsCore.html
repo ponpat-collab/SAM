@@ -288,6 +288,32 @@
       (opts.signatures === false ? '' : '<div class="pr-sign"><div class="s"><div class="line"></div>ครูที่ปรึกษา</div><div class="s"><div class="line"></div>หัวหน้าฝ่ายปกครอง</div><div class="s"><div class="line"></div>ผู้อำนวยการ</div></div>') +
       '<div class="pr-foot">' + esc(app.name || '') + ' · ผู้พิมพ์: ' + esc((Store.user || {}).full_name || '-') + '</div>' +
     '</div>';
+    // --- GitHub Pages edition: open the print document in a new tab (no sandboxed iframe here) ---
+    if (window.__SAM_API_BASE__) {
+    var w = null;
+    try { w = window.open('', '_blank'); } catch (e) { w = null; }
+    if (w && w.document) {
+    var css = '';
+    document.querySelectorAll('style').forEach(function (s) { css += s.textContent + '\n'; });
+    var links = '';
+    document.querySelectorAll('link[rel="stylesheet"]').forEach(function (l) { if (l.href) links += '<link rel="stylesheet" href="' + l.href + '">'; });
+    var ttl = (opts.title || 'รายงาน') + ' - ' + (app.name || 'SAM');
+    w.document.open();
+    w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(ttl) + '</title>' + links +
+    '<style>' + css + '\nhtml,body{height:auto!important;overflow:visible!important;background:#fff!important;margin:0}' +
+    'body>.pr-only{display:block!important;position:static!important;visibility:visible!important}' +
+    '.pr-toolbar{position:sticky;top:0;z-index:99;display:flex;gap:8px;justify-content:flex-end;padding:8px 12px;background:#f1f5f9;border-bottom:1px solid #cbd5e1;font-family:inherit}' +
+    '.pr-toolbar button{padding:6px 14px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#fff;cursor:pointer;font-size:14px}' +
+    '.pr-toolbar button.alt{background:#fff;color:#334155;border-color:#94a3b8}' +
+    '@media print{.pr-toolbar{display:none!important}}</style></head><body class="prt-on">' +
+    '<div class="pr-toolbar"><button class="alt" onclick="window.close()">ปิด</button><button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>' +
+    doc.outerHTML +
+    '<script>window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},500);});<\/script>' +
+    '</body></html>');
+    w.document.close();
+    return;
+    }
+    }
     document.body.appendChild(doc);
     document.body.classList.add('prt-on');
     try { window.print(); } catch (e) {}
